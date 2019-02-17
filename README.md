@@ -9,6 +9,8 @@ It is meant for discussion, prototype specification and implementation of a prop
 
 * See the [formal specification](https://github.com/effect-handlers/wasm-effect) for the proposed semantics for effect handlers.
 
+* This extension is designed to be compatible with the proposed exception handler extension. The specification for [exception handlers is being developed in a separate branch](https://github.com/effect-handlers/wasm-effect-handlers/tree/exception-handlers).
+
 Original `README` from upstream repository follows...
 
 # spec
