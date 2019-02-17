@@ -131,8 +131,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
 :ref:`Function Instances <syntax-funcinst>` :math:`\{\FITYPE~\functype, \FIMODULE~\moduleinst, \FICODE~\func\}`
 .......................................................................................................................
 
-* The :ref:`function type <syntax-functype>` :math:`\functype` must be :ref:`valid <valid-functype>`.
-
 * The :ref:`module instance <syntax-moduleinst>` :math:`\moduleinst` must be :ref:`valid <valid-moduleinst>` with some :ref:`context <context>` :math:`C`.
 
 * Under :ref:`context <context>` :math:`C`, the :ref:`function <syntax-func>` :math:`\func` must be :ref:`valid <valid-func>` with :ref:`function type <syntax-functype>` :math:`\functype`.
@@ -141,8 +139,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
 
 .. math::
    \frac{
-     \vdashfunctype \functype \ok
-     \qquad
      S \vdashmoduleinst \moduleinst : C
      \qquad
      C \vdashfunc \func : \functype
@@ -156,8 +152,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
 
 :ref:`Host Function Instances <syntax-funcinst>` :math:`\{\FITYPE~\functype, \FIHOSTCODE~\X{hf}\}`
 ..................................................................................................
-
-* The :ref:`function type <syntax-functype>` :math:`\functype` must be :ref:`valid <valid-functype>`.
 
 * Let :math:`[t_1^\ast] \to [t_2^\ast]` be the :ref:`function type <syntax-functype>` :math:`\functype`.
 
@@ -175,10 +169,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
 
 .. math::
    \frac{
-     \begin{array}[b]{@{}l@{}}
-     \vdashfunctype [t_1^\ast] \to [t_2^\ast] \ok \\
-     \end{array}
-     \quad
      \begin{array}[b]{@{}l@{}}
      \forall S_1, \val^\ast,~
        {\vdashstore S_1 \ok} \wedge
@@ -289,8 +279,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
 :ref:`Module Instances <syntax-moduleinst>` :math:`\moduleinst`
 ...............................................................
 
-* Each :ref:`function type <syntax-functype>` :math:`\functype_i` in :math:`\moduleinst.\MITYPES` must be :ref:`valid <valid-functype>`.
-
 * For each :ref:`function address <syntax-funcaddr>` :math:`\funcaddr_i` in :math:`\moduleinst.\MIFUNCS`, the :ref:`external value <syntax-externval>` :math:`\EVFUNC~\funcaddr_i` must be :ref:`valid <valid-externval-func>` with some :ref:`external type <syntax-externtype>` :math:`\ETFUNC~\functype'_i`.
 
 * For each :ref:`table address <syntax-tableaddr>` :math:`\tableaddr_i` in :math:`\moduleinst.\MITABLES`, the :ref:`external value <syntax-externval>` :math:`\EVTABLE~\tableaddr_i` must be :ref:`valid <valid-externval-table>` with some :ref:`external type <syntax-externtype>` :math:`\ETTABLE~\tabletype_i`.
@@ -317,8 +305,6 @@ Module instances are classified by *module contexts*, which are regular :ref:`co
    ~\\[-1ex]
    \frac{
      \begin{array}{@{}c@{}}
-     (\vdashfunctype \functype \ok)^\ast
-     \\
      (S \vdashexternval \EVFUNC~\funcaddr : \ETFUNC~\functype')^\ast
      \qquad
      (S \vdashexternval \EVTABLE~\tableaddr : \ETTABLE~\tabletype)^\ast

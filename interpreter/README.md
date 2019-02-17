@@ -1,6 +1,6 @@
-# WebAssembly Interpreter
+# WebAssembly Reference Interpreter
 
-This repository implements a reference interpreter for WebAssembly. It is written for clarity and simplicity, _not_ speed. It is intended as a playground for trying out ideas and a device for nailing down the exact semantics, and as a proxy for the (yet to be produced) formal specification of WebAssembly. For that purpose, the code is written in a fairly declarative, "speccy" way.
+This repository implements a interpreter for WebAssembly. It is written for clarity and simplicity, _not_ speed. It is intended as a playground for trying out ideas and a device for nailing down the exact semantics, and as a proxy for the (yet to be produced) formal specification of WebAssembly. For that purpose, the code is written in a fairly declarative, "speccy" way.
 
 The interpreter can
 
@@ -181,7 +181,7 @@ relop: eq | ne | lt | ...
 sign:  s|u
 offset: offset=<nat>
 align: align=(1|2|4|8|...)
-cvtop: trunc_s | trunc_u | extend_s | extend_u | ...
+cvtop: trunc | extend | wrap | ...
 
 num_type: i32 | i64 | f32 | f64
 ref_type: anyref | anyfunc
@@ -224,8 +224,11 @@ op:
   local.tee <var>
   global.get <var>
   global.set <var>
+<<<<<<< HEAD
   table.get <var>
   table.set <var>
+=======
+>>>>>>> multi-value/master
   <val_type>.load((8|16|32)_<sign>)? <offset>? <align>?
   <val_type>.store(8|16|32)? <offset>? <align>?
   memory.size

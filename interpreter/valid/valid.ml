@@ -167,9 +167,6 @@ let check_memop (c : context) (memop : 'a memop) get_sz at =
   require (1 lsl memop.align <= size) at
     "alignment must not be larger than natural"
 
-let check_arity n at =
-  require (n <= 1) at "invalid result arity, larger than 1 is not (yet) allowed"
-
 
 (*
  * Conventions:
@@ -191,6 +188,12 @@ let check_arity n at =
  * declarative typing rules.
  *)
 
+let check_block_type (c : context) (bt : block_type) : func_type =
+  match bt with
+  | VarBlockType x -> type_ c x
+  | ValBlockType None -> FuncType ([], [])
+  | ValBlockType (Some t) -> FuncType ([], [t])
+
 let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
   match e.it with
   | Unreachable ->
@@ -208,21 +211,27 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let t = join_type t1 t2 e.at in
     [t; t; Some (NumType I32Type)] -~> [t]
 
-  | Block (ts, es) ->
-    check_arity (List.length ts) e.at;
-    check_block {c with labels = ts :: c.labels} es ts e.at;
-    [] --> ts
+  | Block (bt, es) ->
+    let FuncType (ts1, ts2) as ft = check_block_type c bt in
+    check_block {c with labels = ts2 :: c.labels} es ft e.at;
+    ts1 --> ts2
 
-  | Loop (ts, es) ->
-    check_arity (List.length ts) e.at;
-    check_block {c with labels = [] :: c.labels} es ts e.at;
-    [] --> ts
+  | Loop (bt, es) ->
+    let FuncType (ts1, ts2) as ft = check_block_type c bt in
+    check_block {c with labels = ts1 :: c.labels} es ft e.at;
+    ts1 --> ts2
 
-  | If (ts, es1, es2) ->
-    check_arity (List.length ts) e.at;
-    check_block {c with labels = ts :: c.labels} es1 ts e.at;
-    check_block {c with labels = ts :: c.labels} es2 ts e.at;
-    [NumType I32Type] --> ts
+  (* | If (ts, es1, es2) ->
+   *   check_arity (List.length ts) e.at;
+   *   check_block {c with labels = ts :: c.labels} es1 ts e.at;
+   *   check_block {c with labels = ts :: c.labels} es2 ts e.at;
+   *   [NumType I32Type] --> ts *)
+
+  | If (bt, es1, es2) ->
+    let FuncType (ts1, ts2) as ft = check_block_type c bt in
+    check_block {c with labels = ts2 :: c.labels} es1 ft e.at;
+    check_block {c with labels = ts2 :: c.labels} es2 ft e.at;
+    (ts1 @ [NumType I32Type]) --> ts2
 
   | Br x ->
     label c x -->... []
@@ -256,9 +265,14 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let TableType (lim, t) = table c x in
     let FuncType (ins, out) = type_ c y in
     require (match_ref_type t FuncRefType) x.at
-      ("type mismatch: operator requires table of functions, " ^ 
+      ("type mismatch: operator requires table of functions, " ^
        "but table has " ^ string_of_ref_type t);
     (ins @ [NumType I32Type]) --> out
+
+  (* | CallIndirect x ->
+   *   ignore (table c (0l @@ e.at));
+   *   let FuncType (ins, out) = type_ c x in
+   *   (ins @ [I32Type]) --> out *)
 
   | LocalGet x ->
     [] --> [local c x]
@@ -336,22 +350,24 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let t1, t2 = type_cvtop e.at cvtop in
     [NumType t1] --> [NumType t2]
 
-and check_seq (c : context) (es : instr list) : infer_stack_type =
+and check_seq (c : context) (s : infer_stack_type) (es : instr list)
+  : infer_stack_type =
   match es with
   | [] ->
-    stack []
+    s
 
   | _ ->
     let es', e = Lib.List.split_last es in
-    let s = check_seq c es' in
-    let {ins; outs} = check_instr c e s in
-    push outs (pop ins s e.at)
+    let s' = check_seq c s es' in
+    let {ins; outs} = check_instr c e s' in
+    push outs (pop ins s' e.at)
 
-and check_block (c : context) (es : instr list) (ts : stack_type) at =
-  let s = check_seq c es in
-  let s' = pop (stack ts) s at in
+and check_block (c : context) (es : instr list) (ft : func_type) at =
+  let FuncType (ts1, ts2) = ft in
+  let s = check_seq c (stack ts1) es in
+  let s' = pop (stack ts2) s at in
   require (snd s' = []) at
-    ("type mismatch: operator requires " ^ string_of_stack_type ts ^
+    ("type mismatch: block requires " ^ string_of_stack_type ts2 ^
      " but stack has " ^ string_of_infer_types (snd s))
 
 
@@ -380,8 +396,7 @@ let check_value_type (t : value_type) at =
 let check_func_type (ft : func_type) at =
   let FuncType (ins, out) = ft in
   List.iter (fun t -> check_value_type t at) ins;
-  List.iter (fun t -> check_value_type t at) out;
-  check_arity (List.length out) at
+  List.iter (fun t -> check_value_type t at) out
 
 let check_table_type (tt : table_type) at =
   let TableType (lim, t) = tt in
@@ -398,6 +413,10 @@ let check_global_type (gt : global_type) at =
   check_value_type t at
 
 
+let check_type (t : type_) =
+  check_func_type t.it t.at
+
+
 (* Functions & Constants *)
 
 (*
@@ -412,14 +431,11 @@ let check_global_type (gt : global_type) at =
  *   x : variable
  *)
 
-let check_type (t : type_) =
-  check_func_type t.it t.at
-
 let check_func (c : context) (f : func) =
   let {ftype; locals; body} = f.it in
   let FuncType (ins, out) = type_ c ftype in
   let c' = {c with locals = ins @ locals; results = out; labels = [out]} in
-  check_block c' body out f.at
+  check_block c' body (FuncType ([], out)) f.at
 
 
 let is_const (c : context) (e : instr) =
@@ -433,7 +449,7 @@ let is_const (c : context) (e : instr) =
 let check_const (c : context) (const : const) (t : value_type) =
   require (List.for_all (is_const c) const.it) const.at
     "constant expression required";
-  check_block c const.it [t] const.at
+  check_block c const.it (FuncType ([], [t])) const.at
 
 
 (* Tables, Memories, & Globals *)
