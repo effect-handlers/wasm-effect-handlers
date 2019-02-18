@@ -373,6 +373,13 @@ rule token = parse
 
   | reserved { error lexbuf "unknown operator" }
   | utf8 { error lexbuf "malformed operator" }
+
+  | "try" { TRY }
+  | "catch" { CATCH }
+  | "throw" { THROW }
+  | "rethrow" { RETHROW }
+  | "exception" { EXCEPTION }
+
   | _ { error lexbuf "malformed UTF-8 encoding" }
 
 and comment start = parse

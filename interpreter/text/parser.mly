@@ -99,7 +99,7 @@ let bind category space x =
   let i = space.count in
   space.map <- VarMap.add x.it space.count space.map;
   space.count <- Int32.add space.count 1l;
-  if space.count = 0l then 
+  if space.count = 0l then
     error x.at ("too many " ^ category ^ " bindings");
   i
 
@@ -147,7 +147,7 @@ let inline_type_explicit (c : context) x ft at =
 
 %token LPAR RPAR
 %token NAT INT FLOAT STRING VAR
-%token ANYREF FUNCREF NUM_TYPE MUT
+%token ANYREF FUNCREF NUM_TYPE MUT EXN
 %token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
@@ -157,6 +157,7 @@ let inline_type_explicit (c : context) x ft at =
 %token UNREACHABLE MEMORY_SIZE MEMORY_GROW
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
 %token TABLE ELEM MEMORY DATA OFFSET IMPORT EXPORT TABLE
+%token EXCEPTION TRY CATCH THROW RETHROW
 %token MODULE BIN QUOTE
 %token SCRIPT REGISTER INVOKE GET
 %token ASSERT_MALFORMED ASSERT_INVALID ASSERT_SOFT_INVALID ASSERT_UNLINKABLE
@@ -339,6 +340,8 @@ plain_instr :
   | UNARY { fun c -> $1 }
   | BINARY { fun c -> $1 }
   | CONVERT { fun c -> $1 }
+  | THROW var { fun c -> throw ($2 c func) }
+  | RETHROW { fun c -> Rethrow }
 
 
 call_instr :
@@ -464,7 +467,11 @@ expr1 :  /* Sugar */
     { fun c -> let c' = $2 c [] in let bt, es = $3 c' in [], loop bt es }
   | IF labeling_opt if_block
     { fun c -> let c' = $2 c [] in
-      let bt, (es, es1, es2) = $3 c c' in es, if_ bt es1 es2 }
+        let bt, (es, es1, es2) = $3 c c' in es, if_ bt es1 es2 }
+  | TRY try_block
+    { fun c ->
+      let bt, (es1, es2) = $2 c in
+      [], try_ bt es1 es2 }
 
 call_expr_type :
   | type_use call_expr_params
@@ -490,6 +497,39 @@ call_expr_results :
   | expr_list
     { fun c -> [], $1 c }
 
+try_block :
+  | type_use try_block_param_body
+    { let at = at () in
+      fun c ->
+      VarBlockType (inline_type_explicit c ($1 c type_) (fst $2) at),
+      snd $2 c }
+  | try_block_param_body  /* Sugar */
+    { let at = at () in
+      fun c ->
+      let bt =
+        match fst $1 with
+        | FuncType ([], []) -> ValBlockType None
+        | FuncType ([], [t]) -> ValBlockType (Some t)
+        | ft ->  VarBlockType (inline_type c ft at)
+      in bt, snd $1 c }
+
+try_block_param_body :
+  | try_block_result_body { $1 }
+  | LPAR PARAM value_type_list RPAR try_block_param_body
+    { let FuncType (ins, out) = fst $5 in
+      FuncType ($3 @ ins, out), snd $5 }
+
+try_block_result_body :
+  | try_ { FuncType ([], []), $1 }
+  | LPAR RESULT value_type_list RPAR try_block_result_body
+    { let FuncType (ins, out) = fst $5 in
+      FuncType (ins, $3 @ out), snd $5 }
+
+try_ :
+ | LPAR THEN instr_list RPAR LPAR CATCH instr_list RPAR
+   { fun c ->
+     let es1, es2 = $3 c, $7 c in
+     (es1, es2) }
 
 if_block :
   | type_use if_block_param_body
@@ -539,7 +579,6 @@ expr_list :
 
 const_expr :
   | instr_list { let at = at () in fun c -> $1 c @@ at }
-
 
 /* Functions */
 

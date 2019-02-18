@@ -377,6 +377,10 @@ let encode m =
       | RefIsNull -> op 0xd1
       | RefFunc x -> op 0xd2; var x
 
+      | Try _ -> assert false (* TODO FIXME. *)
+      | Throw _ -> assert false (* TODO FIXME. *)
+      | Rethrow -> assert false (* TODO FIXME. *)
+
     let const c =
       list instr c.it; end_ ()
 
