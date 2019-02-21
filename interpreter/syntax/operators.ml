@@ -207,5 +207,5 @@ let f64_reinterpret_i64 = Convert (F64 F64Op.ReinterpretInt)
 let memory_size = MemorySize
 let memory_grow = MemoryGrow
 
-let try_ bt es1 es2 = If (bt, es1, es2)
+let try_ bt es1 es2 = Try (bt, es1, es2)
 let throw x = Throw x
