@@ -73,6 +73,9 @@ let global_type = function
   | GlobalType (t, Immutable) -> atom string_of_value_type t
   | GlobalType (t, Mutable) -> Node ("mut", [atom string_of_value_type t])
 
+let exn_type (ExnType ts) =
+  Node ("exn", decls "param" ts)
+
 
 (* Operators *)
 
@@ -325,6 +328,7 @@ let import_desc i d =
   | TableImport t -> table 0 i ({ttype = t} @@ d.at)
   | MemoryImport t -> memory 0 i ({mtype = t} @@ d.at)
   | GlobalImport t -> Node ("global $" ^ nat i, [global_type t])
+  | ExnImport t -> Node ("exception $" ^ nat i, [exn_type t])
 
 let import i im =
   let {module_name; item_name; idesc} = im.it in
@@ -338,6 +342,7 @@ let export_desc d =
   | TableExport x -> Node ("table", [atom var x])
   | MemoryExport x -> Node ("memory", [atom var x])
   | GlobalExport x -> Node ("global", [atom var x])
+  | ExnExport x -> Node ("exception", [atom var x])
 
 let export ex =
   let {name = n; edesc} = ex.it in

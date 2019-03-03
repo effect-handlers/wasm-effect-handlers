@@ -214,6 +214,7 @@ let print_import m im =
     | ExternTableType t -> "table", string_of_table_type t
     | ExternMemoryType t -> "memory", string_of_memory_type t
     | ExternGlobalType t -> "global", string_of_global_type t
+    | ExternExnType t -> "exn", string_of_exn_type t
   in
   Printf.printf "  import %s \"%s\" \"%s\" : %s\n"
     category (Ast.string_of_name im.it.Ast.module_name)
@@ -227,6 +228,7 @@ let print_export m ex =
     | ExternTableType t -> "table", string_of_table_type t
     | ExternMemoryType t -> "memory", string_of_memory_type t
     | ExternGlobalType t -> "global", string_of_global_type t
+    | ExternExnType t -> "exn", string_of_exn_type t
   in
   Printf.printf "  export %s \"%s\" : %s\n"
     category (Ast.string_of_name ex.it.Ast.name) annotation

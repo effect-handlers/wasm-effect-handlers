@@ -24,11 +24,13 @@ type context =
   locals : value_type list;
   results : value_type list;
   labels : stack_type list;
+  exns : exn_type list;
 }
 
 let empty_context =
   { types = []; funcs = []; tables = []; memories = [];
-    globals = []; locals = []; results = []; labels = [] }
+    globals = []; locals = []; results = []; labels = [];
+    exns = [] }
 
 let lookup category list x =
   try Lib.List32.nth list x.it with Failure _ ->
@@ -41,6 +43,7 @@ let memory (c : context) x = lookup "memory" c.memories x
 let global (c : context) x = lookup "global" c.globals x
 let local (c : context) x = lookup "local" c.locals x
 let label (c : context) x = lookup "label" c.labels x
+let exn (c : context) x = lookup "exception" c.exns x
 
 
 (* Stack typing *)
@@ -416,6 +419,9 @@ let check_global_type (gt : global_type) at =
   let GlobalType (t, mut) = gt in
   check_value_type t at
 
+let check_exn_type (et : exn_type) at =
+  let ExnType ts = et in
+  List.iter (fun t -> check_value_type t at) ts
 
 let check_type (t : type_) =
   check_func_type t.it t.at
@@ -482,7 +488,6 @@ let check_global (c : context) (glob : global) =
   let GlobalType (t, mut) = gtype in
   check_const c value t
 
-
 (* Modules *)
 
 let check_start (c : context) (start : var option) =
@@ -505,6 +510,9 @@ let check_import (im : import) (c : context) : context =
   | GlobalImport gt ->
     check_global_type gt idesc.at;
     {c with globals = gt :: c.globals}
+  | ExnImport et ->
+    check_exn_type et idesc.at;
+    {c with exns = et :: c.exns}
 
 module NameSet = Set.Make(struct type t = Ast.name let compare = compare end)
 
@@ -515,6 +523,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
   | TableExport x -> ignore (table c x)
   | MemoryExport x -> ignore (memory c x)
   | GlobalExport x -> ignore (global c x)
+  | ExnExport x -> ignore (exn c x)
   );
   require (not (NameSet.mem name set)) ex.at "duplicate export name";
   NameSet.add name set
@@ -522,7 +531,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
 let check_module (m : module_) =
   let
     { types; imports; tables; memories; globals; funcs; start; elems; data;
-      exports } = m.it
+      exports; exns } = m.it
   in
   let c0 =
     List.fold_right check_import imports

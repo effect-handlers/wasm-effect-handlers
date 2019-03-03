@@ -1,7 +1,7 @@
 (* Types *)
 
 type num_type = I32Type | I64Type | F32Type | F64Type
-type ref_type = NullRefType | AnyRefType | FuncRefType
+type ref_type = NullRefType | AnyRefType | FuncRefType | ExnRefType
 type value_type = NumType of num_type | RefType of ref_type
 type stack_type = value_type list
 type func_type = FuncType of stack_type * stack_type
@@ -11,11 +11,13 @@ type mutability = Immutable | Mutable
 type table_type = TableType of Int32.t limits * ref_type
 type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
+type exn_type = ExnType of stack_type
 type extern_type =
   | ExternFuncType of func_type
   | ExternTableType of table_type
   | ExternMemoryType of memory_type
   | ExternGlobalType of global_type
+  | ExternExnType of exn_type
 
 
 (* Attributes *)
@@ -60,7 +62,10 @@ let match_memory_type (MemoryType lim1) (MemoryType lim2) =
 
 let match_global_type (GlobalType (t1, mut1)) (GlobalType (t2, mut2)) =
   mut1 = mut2 &&
-  (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
+    (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
+
+let match_exn_type et1 et2 =
+  et1 = et2
 
 let match_extern_type et1 et2 =
   match et1, et2 with
@@ -68,6 +73,7 @@ let match_extern_type et1 et2 =
   | ExternTableType tt1, ExternTableType tt2 -> match_table_type tt1 tt2
   | ExternMemoryType mt1, ExternMemoryType mt2 -> match_memory_type mt1 mt2
   | ExternGlobalType gt1, ExternGlobalType gt2 -> match_global_type gt1 gt2
+  | ExternExnType et1, ExternExnType et2 -> match_exn_type et1 et2
   | _, _ -> false
 
 
@@ -125,6 +131,8 @@ let memories =
   Lib.List.map_filter (function ExternMemoryType t -> Some t | _ -> None)
 let globals =
   Lib.List.map_filter (function ExternGlobalType t -> Some t | _ -> None)
+let exns =
+  Lib.List.map_filter (function ExternExnType t -> Some t | _ -> None)
 
 
 (* String conversion *)
@@ -139,6 +147,7 @@ let string_of_ref_type = function
   | NullRefType -> "nullref"
   | AnyRefType -> "anyref"
   | FuncRefType -> "funcref"
+  | ExnRefType -> "exnref"
 
 let string_of_value_type = function
   | NumType t -> string_of_num_type t
@@ -169,8 +178,12 @@ let string_of_stack_type ts =
 let string_of_func_type (FuncType (ins, out)) =
   string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
 
+let string_of_exn_type (ExnType ts) =
+  string_of_stack_type ts
+
 let string_of_extern_type = function
   | ExternFuncType ft -> "func " ^ string_of_func_type ft
   | ExternTableType tt -> "table " ^ string_of_table_type tt
   | ExternMemoryType mt -> "memory " ^ string_of_memory_type mt
   | ExternGlobalType gt -> "global " ^ string_of_global_type gt
+  | ExternExnType et -> "exception " ^ string_of_exn_type et

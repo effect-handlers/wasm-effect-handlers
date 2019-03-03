@@ -428,6 +428,7 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
     | GlobalExport x -> ExternGlobal (global inst x)
+    | ExnExport x -> assert false (* TODO FIXME. *)
   in name, ext
 
 
@@ -472,7 +473,7 @@ let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
 let init (m : module_) (exts : extern list) : module_inst =
   let
     { imports; tables; memories; globals; funcs; types;
-      exports; elems; data; start
+      exports; elems; data; start; exns
     } = m.it
   in
   if List.length exts <> List.length imports then

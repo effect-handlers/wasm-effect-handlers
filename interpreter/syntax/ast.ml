@@ -154,6 +154,12 @@ and 'data segment' =
 type table_segment = var list segment
 type memory_segment = string segment
 
+(* Exceptions *)
+type exn = exn' Source.phrase
+and exn' =
+{
+  extype: exn_type
+}
 
 (* Modules *)
 
@@ -165,6 +171,7 @@ and export_desc' =
   | TableExport of var
   | MemoryExport of var
   | GlobalExport of var
+  | ExnExport of var
 
 type export = export' Source.phrase
 and export' =
@@ -179,6 +186,7 @@ and import_desc' =
   | TableImport of table_type
   | MemoryImport of memory_type
   | GlobalImport of global_type
+  | ExnImport of exn_type
 
 type import = import' Source.phrase
 and import' =
@@ -201,6 +209,7 @@ and module_' =
   data : string segment list;
   imports : import list;
   exports : export list;
+  exns : exn list
 }
 
 
@@ -218,6 +227,7 @@ let empty_module =
   data = [];
   imports = [];
   exports = [];
+  exns = []
 }
 
 open Source
@@ -232,6 +242,7 @@ let import_type (m : module_) (im : import) : extern_type =
   | TableImport t -> ExternTableType t
   | MemoryImport t -> ExternMemoryType t
   | GlobalImport t -> ExternGlobalType t
+  | ExnImport t -> ExternExnType t
 
 let export_type (m : module_) (ex : export) : extern_type =
   let {edesc; _} = ex.it in
@@ -251,6 +262,9 @@ let export_type (m : module_) (ex : export) : extern_type =
   | GlobalExport x ->
     let gts = globals its @ List.map (fun g -> g.it.gtype) m.it.globals in
     ExternGlobalType (nth gts x.it)
+  | ExnExport x ->
+    let ets = exns its @ List.map (fun e -> e.it.extype) m.it.exns in
+    ExternExnType (nth ets x.it)
 
 let string_of_name n =
   let b = Buffer.create 16 in

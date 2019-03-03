@@ -100,6 +100,7 @@ let encode m =
     let ref_type = function
       | FuncRefType -> vs7 (-0x10)
       | AnyRefType -> vs7 (-0x11)
+      | ExnRefType -> assert false (* TODO FIXME. *)
       | NullRefType -> assert false
 
     let value_type = function
@@ -408,6 +409,7 @@ let encode m =
       | TableImport t -> u8 0x01; table_type t
       | MemoryImport t -> u8 0x02; memory_type t
       | GlobalImport t -> u8 0x03; global_type t
+      | ExnImport t -> assert false (* TODO FIXME. *)
 
     let import im =
       let {module_name; item_name; idesc} = im.it in
@@ -453,6 +455,7 @@ let encode m =
       | TableExport x -> u8 1; var x
       | MemoryExport x -> u8 2; var x
       | GlobalExport x -> u8 3; var x
+      | ExnExport x -> assert false (* TODO FIXME. *)
 
     let export ex =
       let {name = n; edesc} = ex.it in

@@ -64,12 +64,13 @@ let empty_types () = {space = empty (); list = []}
 
 type context =
   { types : types; tables : space; memories : space;
-    funcs : space; locals : space; globals : space; labels : int32 VarMap.t }
+    funcs : space; locals : space; globals : space; labels : int32 VarMap.t;
+    exceptions : space }
 
 let empty_context () =
   { types = empty_types (); tables = empty (); memories = empty ();
     funcs = empty (); locals = empty (); globals = empty ();
-    labels = VarMap.empty }
+    labels = VarMap.empty; exceptions = empty () }
 
 let enter_func (c : context) =
   {c with labels = VarMap.empty; locals = empty ()}
@@ -87,6 +88,7 @@ let memory (c : context) x = lookup "memory" c.memories x
 let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
+let exn (c : context) x = lookup "exception" c.exceptions x
 
 let func_type (c : context) x =
   try (Lib.List32.nth c.types.list x.it).it
@@ -113,6 +115,7 @@ let bind_table (c : context) x = bind "table" c.tables x
 let bind_memory (c : context) x = bind "memory" c.memories x
 let bind_label (c : context) x =
   {c with labels = VarMap.add x.it 0l (VarMap.map (Int32.add 1l) c.labels)}
+let bind_exn (c : context) x = bind "exception" c.exceptions x
 
 let anon category space n =
   let i = space.count in
@@ -132,6 +135,7 @@ let anon_table (c : context) = anon "table" c.tables 1l
 let anon_memory (c : context) = anon "memory" c.memories 1l
 let anon_label (c : context) =
   {c with labels = VarMap.map (Int32.add 1l) c.labels}
+let anon_exn (c : context) = anon "exception" c.exceptions 1l
 
 let inline_type (c : context) ft at =
   match Lib.List.index_where (fun ty -> ty.it = ft) c.types.list with
@@ -212,6 +216,7 @@ string_list :
 ref_type :
   | ANYREF { AnyRefType }
   | FUNCREF { FuncRefType }
+  | EXNREF { assert false (* TODO FIXME. *) }
 
 value_type :
   | NUM_TYPE { NumType $1 }
@@ -227,6 +232,12 @@ global_type :
 
 def_type :
   | LPAR FUNC func_type RPAR { $3 }
+
+exn_type :
+  | /* empty */
+    { ExnType [] }
+  | LPAR PARAM value_type_list RPAR
+    { ExnType $3 }
 
 func_type :
   | /* empty */
@@ -751,6 +762,9 @@ import_desc :
   | LPAR GLOBAL bind_var_opt global_type RPAR
     { fun c -> ignore ($3 c anon_global bind_global);
       fun () -> GlobalImport $4 }
+  | LPAR EXCEPTION bind_var_opt exn_type RPAR
+    { fun c -> ignore ($3 c anon_exn bind_exn);
+      fun () -> ExnImport $4 }
 
 import :
   | LPAR IMPORT name name import_desc RPAR
@@ -766,6 +780,7 @@ export_desc :
   | LPAR TABLE var RPAR { fun c -> TableExport ($3 c table) }
   | LPAR MEMORY var RPAR { fun c -> MemoryExport ($3 c memory) }
   | LPAR GLOBAL var RPAR { fun c -> GlobalExport ($3 c global) }
+  | LPAR EXCEPTION var RPAR { fun c -> ExnExport ($3 c exn) }
 
 export :
   | LPAR EXPORT name export_desc RPAR
