@@ -209,3 +209,4 @@ let memory_grow = MemoryGrow
 
 let try_ bt es1 es2 = Try (bt, es1, es2)
 let throw x = Throw x
+let rethrow = Rethrow

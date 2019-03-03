@@ -143,11 +143,15 @@ let inline_type_explicit (c : context) x ft at =
     error at "inline function type does not match explicit type";
   x
 
+let block_type at (c : context) = function
+  | FuncType ([], []) -> ValBlockType None
+  | FuncType ([], [t]) -> ValBlockType (Some t)
+  | ft ->  VarBlockType (inline_type c ft at)
 %}
 
 %token LPAR RPAR
 %token NAT INT FLOAT STRING VAR
-%token ANYREF FUNCREF NUM_TYPE MUT EXN
+%token ANYREF FUNCREF EXNREF NUM_TYPE MUT
 %token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
@@ -341,7 +345,7 @@ plain_instr :
   | BINARY { fun c -> $1 }
   | CONVERT { fun c -> $1 }
   | THROW var { fun c -> throw ($2 c func) }
-  | RETHROW { fun c -> Rethrow }
+  | RETHROW { fun c -> rethrow }
 
 
 call_instr :
@@ -418,9 +422,6 @@ block_instr :
     { fun c -> let c' = $2 c ($5 @ $8) in
       let ts, es1 = $3 c' in if_ ts es1 ($6 c') }
 
-block_type :
-  | LPAR RESULT value_type RPAR { [$3] }
-
 block :
   | type_use block_param_body
     { let at1 = ati 1 in
@@ -430,12 +431,8 @@ block :
   | block_param_body  /* Sugar */
     { let at = at () in
       fun c ->
-      let bt =
-        match fst $1 with
-        | FuncType ([], []) -> ValBlockType None
-        | FuncType ([], [t]) -> ValBlockType (Some t)
-        | ft ->  VarBlockType (inline_type c ft at)
-      in bt, snd $1 c }
+      let bt = block_type at c (fst $1) in
+      bt, snd $1 c }
 
 block_param_body :
   | block_result_body { $1 }
@@ -467,7 +464,7 @@ expr1 :  /* Sugar */
     { fun c -> let c' = $2 c [] in let bt, es = $3 c' in [], loop bt es }
   | IF labeling_opt if_block
     { fun c -> let c' = $2 c [] in
-        let bt, (es, es1, es2) = $3 c c' in es, if_ bt es1 es2 }
+      let bt, (es, es1, es2) = $3 c c' in es, if_ bt es1 es2 }
   | TRY try_block
     { fun c ->
       let bt, (es1, es2) = $2 c in
@@ -506,12 +503,8 @@ try_block :
   | try_block_param_body  /* Sugar */
     { let at = at () in
       fun c ->
-      let bt =
-        match fst $1 with
-        | FuncType ([], []) -> ValBlockType None
-        | FuncType ([], [t]) -> ValBlockType (Some t)
-        | ft ->  VarBlockType (inline_type c ft at)
-      in bt, snd $1 c }
+      let bt = block_type at c (fst $1) in
+      bt, snd $1 c }
 
 try_block_param_body :
   | try_block_result_body { $1 }
@@ -540,12 +533,8 @@ if_block :
   | if_block_param_body  /* Sugar */
     { let at = at () in
       fun c c' ->
-      let bt =
-        match fst $1 with
-        | FuncType ([], []) -> ValBlockType None
-        | FuncType ([], [t]) -> ValBlockType (Some t)
-        | ft ->  VarBlockType (inline_type c ft at)
-      in bt, snd $1 c c' }
+      let bt = block_type at c (fst $1) in
+      bt, snd $1 c c' }
 
 if_block_param_body :
   | if_block_result_body { $1 }

@@ -261,8 +261,8 @@ let rec instr e =
     | Binary op -> binop op, []
     | Convert op -> cvtop op, []
     | Try (bt, es1, es2) ->
-       "try", block_type bt @
-                [Node ("then", list instr es1); Node ("catch", list instr es2)]
+      "try", block_type bt @
+        [Node ("then", list instr es1); Node ("catch", list instr es2)]
     | Throw x -> "throw " ^ var x, []
     | Rethrow -> "rethrow", []
   in Node (head, inner)
