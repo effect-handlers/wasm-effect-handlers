@@ -420,8 +420,8 @@ let check_global_type (gt : global_type) at =
   check_value_type t at
 
 let check_exn_type (et : exn_type) at =
-  let ExnType ts = et in
-  List.iter (fun t -> check_value_type t at) ts
+  let ExnType ft = et in
+  check_func_type ft at
 
 let check_type (t : type_) =
   check_func_type t.it t.at

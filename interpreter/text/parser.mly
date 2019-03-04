@@ -234,10 +234,8 @@ def_type :
   | LPAR FUNC func_type RPAR { $3 }
 
 exn_type :
-  | /* empty */
-    { ExnType [] }
-  | LPAR PARAM value_type_list RPAR
-    { ExnType $3 }
+  | func_type
+    { ExnType $1 }
 
 func_type :
   | /* empty */
@@ -652,6 +650,17 @@ func_body :
     { fun c -> ignore (bind_local c $3); let f = $6 c in
       {f with locals = $4 :: f.locals} }
 
+/* Exceptions */
+exn :
+  | LPAR EXCEPTION bind_var_opt exn_sig RPAR
+    { let at = at () in
+      fun c -> let x = $3 c anon_exn bind_exn @@ at in $4 c x }
+
+exn_sig :
+  | exn_type
+    { fun c x ->
+      let at = at () in
+      { extype = $1 } @@ at }
 
 /* Tables, Memories & Globals */
 
@@ -865,6 +874,10 @@ module_fields1 :
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
       {m with exports = $1 c :: m.exports} }
+  | exn module_fields
+    { fun c -> let mf = $2 c in
+      fun () -> let m = mf () in
+      {m with exns = $1 c :: m.exns} }
 
 module_var_opt :
   | /* empty */ { None }
