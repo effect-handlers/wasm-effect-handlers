@@ -158,7 +158,8 @@ type memory_segment = string segment
 type exn = exn' Source.phrase
 and exn' =
 {
-  extype: exn_type
+  exvar : var;
+  extype : exn_type
 }
 
 (* Modules *)
@@ -233,6 +234,9 @@ let empty_module =
 open Source
 
 let func_type_for (m : module_) (x : var) : func_type =
+  (Lib.List32.nth m.it.types x.it).it
+
+let exn_type_for (m : module_) (x : var) : func_type =
   (Lib.List32.nth m.it.types x.it).it
 
 let import_type (m : module_) (im : import) : extern_type =

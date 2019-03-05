@@ -162,6 +162,7 @@ rule token = parse
 
   | "anyref" { ANYREF }
   | "funcref" { FUNCREF }
+  | "exnref"  { EXNREF }
   | (nxx as t) { NUM_TYPE (num_type t) }
   | "mut" { MUT }
 
@@ -198,6 +199,12 @@ rule token = parse
   | "select" { SELECT }
   | "call" { CALL }
   | "call_indirect" { CALL_INDIRECT }
+
+  | "try" { TRY }
+  | "catch" { CATCH }
+  | "throw" { THROW }
+  | "rethrow" { RETHROW }
+  | "exception" { EXCEPTION }
 
   | "local.get" { LOCAL_GET }
   | "local.set" { LOCAL_SET }
@@ -373,12 +380,6 @@ rule token = parse
 
   | reserved { error lexbuf "unknown operator" }
   | utf8 { error lexbuf "malformed operator" }
-
-  | "try" { TRY }
-  | "catch" { CATCH }
-  | "throw" { THROW }
-  | "rethrow" { RETHROW }
-  | "exception" { EXCEPTION }
 
   | _ { error lexbuf "malformed UTF-8 encoding" }
 

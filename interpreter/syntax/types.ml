@@ -11,7 +11,7 @@ type mutability = Immutable | Mutable
 type table_type = TableType of Int32.t limits * ref_type
 type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
-type exn_type = ExnType of func_type
+type exn_type = func_type
 type extern_type =
   | ExternFuncType of func_type
   | ExternTableType of table_type
@@ -64,8 +64,7 @@ let match_global_type (GlobalType (t1, mut1)) (GlobalType (t2, mut2)) =
   mut1 = mut2 &&
     (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
 
-let match_exn_type et1 et2 =
-  et1 = et2
+let match_exn_type = match_func_type
 
 let match_extern_type et1 et2 =
   match et1, et2 with
@@ -178,8 +177,7 @@ let string_of_stack_type ts =
 let string_of_func_type (FuncType (ins, out)) =
   string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
 
-let string_of_exn_type (ExnType ts) =
-  string_of_func_type ts
+let string_of_exn_type = string_of_func_type
 
 let string_of_extern_type = function
   | ExternFuncType ft -> "func " ^ string_of_func_type ft

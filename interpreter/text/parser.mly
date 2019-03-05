@@ -235,7 +235,7 @@ def_type :
 
 exn_type :
   | func_type
-    { ExnType $1 }
+    { $1 }
 
 func_type :
   | /* empty */
@@ -652,15 +652,9 @@ func_body :
 
 /* Exceptions */
 exn :
-  | LPAR EXCEPTION bind_var_opt exn_sig RPAR
+  | LPAR EXCEPTION bind_var_opt exn_type RPAR
     { let at = at () in
-      fun c -> let x = $3 c anon_exn bind_exn @@ at in $4 c x }
-
-exn_sig :
-  | exn_type
-    { fun c x ->
-      let at = at () in
-      { extype = $1 } @@ at }
+      fun c -> let x = $3 c anon_exn bind_exn @@ at in { exvar = x; extype = $4 } @@ at }
 
 /* Tables, Memories & Globals */
 

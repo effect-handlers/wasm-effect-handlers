@@ -419,8 +419,7 @@ let check_global_type (gt : global_type) at =
   let GlobalType (t, mut) = gt in
   check_value_type t at
 
-let check_exn_type (et : exn_type) at =
-  let ExnType ft = et in
+let check_exn_type (ft : exn_type) at =
   check_func_type ft at
 
 let check_type (t : type_) =
