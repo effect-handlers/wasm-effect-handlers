@@ -192,6 +192,7 @@ rule token = parse
   | "br" { BR }
   | "br_if" { BR_IF }
   | "br_table" { BR_TABLE }
+    | "br_on_exn" { BR_EXN }
   | "return" { RETURN }
   | "if" { IF }
   | "then" { THEN }

@@ -107,6 +107,7 @@ and instr' =
   | Try of block_type * instr list * instr list
   | Throw of var
   | Rethrow
+  | BrExn of var * var
 
 
 (* Globals & Functions *)

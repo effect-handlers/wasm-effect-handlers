@@ -356,6 +356,7 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
   | Try _ -> assert false (* TODO FIXME. *)
   | Throw _ -> assert false (* TODO FIXME. *)
   | Rethrow -> assert false (* TODO FIXME. *)
+  | BrExn _ -> assert false (* TODO FIXME. *)
 
 and check_seq (c : context) (s : infer_stack_type) (es : instr list)
   : infer_stack_type =

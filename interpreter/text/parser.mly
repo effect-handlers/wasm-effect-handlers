@@ -156,7 +156,7 @@ let block_type at (c : context) = function
 %token LPAR RPAR
 %token NAT INT FLOAT STRING VAR
 %token ANYREF FUNCREF EXNREF NUM_TYPE MUT
-%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
+%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE BR_EXN
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
 %token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
@@ -331,6 +331,7 @@ plain_instr :
   | BR_TABLE var var_list
     { fun c -> let xs, x = Lib.List.split_last ($2 c label :: $3 c label) in
       br_table xs x }
+  | BR_EXN var var { fun c -> br_exn ($2 c label) ($3 c exn) }
   | RETURN { fun c -> return }
   | CALL var { fun c -> call ($2 c func) }
   | LOCAL_GET var { fun c -> local_get ($2 c local) }

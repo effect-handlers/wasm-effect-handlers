@@ -381,6 +381,7 @@ let encode m =
       | Try _ -> assert false (* TODO FIXME. *)
       | Throw _ -> assert false (* TODO FIXME. *)
       | Rethrow -> assert false (* TODO FIXME. *)
+      | BrExn _ -> assert false (* TODO FIXME. *)
 
     let const c =
       list instr c.it; end_ ()
