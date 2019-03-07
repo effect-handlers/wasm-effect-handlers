@@ -545,6 +545,7 @@ let check_module (m : module_) =
       funcs = c0.funcs @ List.map (fun f -> type_ c0 f.it.ftype) funcs;
       tables = c0.tables @ List.map (fun tab -> tab.it.ttype) tables;
       memories = c0.memories @ List.map (fun mem -> mem.it.mtype) memories;
+      exceptions = c0.exceptions @ List.map (fun exn -> exn.it.xtype) exceptions;
     }
   in
   let c =
