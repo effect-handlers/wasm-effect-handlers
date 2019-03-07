@@ -268,7 +268,7 @@ let rec instr e =
         [Node ("then", list instr es1); Node ("catch", list instr es2)]
     | Throw x -> "throw " ^ var x, []
     | Rethrow -> "rethrow", []
-    | BrOnExn (l, x) -> "br_on_exn" ^ (var l) ^ " " ^ (var x), []
+    | BrOnExn (l, x) -> "br_on_exn " ^ (var l) ^ " " ^ (var x), []
   in Node (head, inner)
 
 let const c =
