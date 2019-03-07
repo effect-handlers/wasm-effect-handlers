@@ -118,7 +118,7 @@ let character =
     [^'"''\\''\x00'-'\x1f''\x7f'-'\xff']
   | utf8enc
   | '\\'escape
-  | '\\'hexdigit hexdigit 
+  | '\\'hexdigit hexdigit
   | "\\u{" hexnum '}'
 
 let nat = num | "0x" hexnum
@@ -192,7 +192,7 @@ rule token = parse
   | "br" { BR }
   | "br_if" { BR_IF }
   | "br_table" { BR_TABLE }
-    | "br_on_exn" { BR_EXN }
+  | "br_on_exn" { BR_ON_EXN }
   | "return" { RETURN }
   | "if" { IF }
   | "then" { THEN }
@@ -200,12 +200,6 @@ rule token = parse
   | "select" { SELECT }
   | "call" { CALL }
   | "call_indirect" { CALL_INDIRECT }
-
-  | "try" { TRY }
-  | "catch" { CATCH }
-  | "throw" { THROW }
-  | "rethrow" { RETHROW }
-  | "exception" { EXCEPTION }
 
   | "local.get" { LOCAL_GET }
   | "local.set" { LOCAL_SET }
@@ -347,6 +341,11 @@ rule token = parse
   | "offset" { OFFSET }
   | "import" { IMPORT }
   | "export" { EXPORT }
+  | "try" { TRY }
+  | "catch" { CATCH }
+  | "throw" { THROW }
+  | "rethrow" { RETHROW }
+  | "exception" { EXCEPTION }
 
   | "module" { MODULE }
   | "binary" { BIN }

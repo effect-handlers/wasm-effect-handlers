@@ -685,8 +685,8 @@ let module_ s =
     List.map2 Source.(fun t f -> {f.it with ftype = t} @@ f.at)
       func_types func_bodies
   in
-  let exns = [] in (* TODO FIXME. *)
-  {types; tables; memories; globals; funcs; exns; imports; exports; elems; data; start}
+  let exceptions = [] in (* TODO FIXME. *)
+  {types; tables; memories; globals; funcs; exceptions; imports; exports; elems; data; start}
 
 
 let decode name bs = at module_ (stream name bs)

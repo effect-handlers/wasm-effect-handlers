@@ -88,7 +88,7 @@ let memory (c : context) x = lookup "memory" c.memories x
 let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
-let exn (c : context) x = lookup "exception" c.exceptions x
+let exception_ (c : context) x = lookup "exception" c.exceptions x
 
 let func_type (c : context) x =
   try (Lib.List32.nth c.types.list x.it).it
@@ -115,7 +115,7 @@ let bind_table (c : context) x = bind "table" c.tables x
 let bind_memory (c : context) x = bind "memory" c.memories x
 let bind_label (c : context) x =
   {c with labels = VarMap.add x.it 0l (VarMap.map (Int32.add 1l) c.labels)}
-let bind_exn (c : context) x = bind "exception" c.exceptions x
+let bind_exception (c : context) x = bind "exception" c.exceptions x
 
 let anon category space n =
   let i = space.count in
@@ -135,7 +135,7 @@ let anon_table (c : context) = anon "table" c.tables 1l
 let anon_memory (c : context) = anon "memory" c.memories 1l
 let anon_label (c : context) =
   {c with labels = VarMap.map (Int32.add 1l) c.labels}
-let anon_exn (c : context) = anon "exception" c.exceptions 1l
+let anon_exception (c : context) = anon "exception" c.exceptions 1l
 
 let inline_type (c : context) ft at =
   match Lib.List.index_where (fun ty -> ty.it = ft) c.types.list with
@@ -156,7 +156,7 @@ let block_type at (c : context) = function
 %token LPAR RPAR
 %token NAT INT FLOAT STRING VAR
 %token ANYREF FUNCREF EXNREF NUM_TYPE MUT
-%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE BR_EXN
+%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE BR_ON_EXN
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
 %token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
@@ -233,9 +233,17 @@ global_type :
 def_type :
   | LPAR FUNC func_type RPAR { $3 }
 
-exn_type :
-  | func_type
-    { $1 }
+exception_type :
+  | /* empty */
+    { ExceptionType ([], []) }
+  | LPAR RESULT value_type_list RPAR exception_type
+    { let ExceptionType (ins, out) = $5 in
+      if ins <> [] then error (at ()) "result before parameter";
+      ExceptionType (ins, $3 @ out) }
+  | LPAR PARAM value_type_list RPAR exception_type
+    { let ExceptionType (ins, out) = $5 in ExceptionType ($3 @ ins, out) }
+  | LPAR PARAM bind_var value_type RPAR exception_type  /* Sugar */
+    { let ExceptionType (ins, out) = $6 in ExceptionType ($4 :: ins, out) }
 
 func_type :
   | /* empty */
@@ -331,7 +339,7 @@ plain_instr :
   | BR_TABLE var var_list
     { fun c -> let xs, x = Lib.List.split_last ($2 c label :: $3 c label) in
       br_table xs x }
-  | BR_EXN var var { fun c -> br_exn ($2 c label) ($3 c exn) }
+  | BR_ON_EXN var var { fun c -> br_on_exn ($2 c label) ($3 c exception_) }
   | RETURN { fun c -> return }
   | CALL var { fun c -> call ($2 c func) }
   | LOCAL_GET var { fun c -> local_get ($2 c local) }
@@ -651,13 +659,7 @@ func_body :
     { fun c -> ignore (bind_local c $3); let f = $6 c in
       {f with locals = $4 :: f.locals} }
 
-/* Exceptions */
-exn :
-  | LPAR EXCEPTION bind_var_opt exn_type RPAR
-    { let at = at () in
-      fun c -> let x = $3 c anon_exn bind_exn @@ at in { exvar = x; extype = $4 } @@ at }
-
-/* Tables, Memories & Globals */
+/* Tables, Memories, Globals & Exceptions */
 
 offset :
   | LPAR OFFSET const_expr RPAR { $3 }
@@ -746,6 +748,22 @@ global_fields :
     { fun c x at -> let globs, ims, exs = $2 c x at in
       globs, ims, $1 (GlobalExport x) c :: exs }
 
+exception_ :
+  | LPAR EXCEPTION bind_var_opt exception_fields RPAR
+    { let at = at () in
+      fun c -> let x = $3 c anon_exception bind_exception @@ at in
+      fun () -> $4 c x at }
+
+exception_fields :
+  | exception_type
+    { fun c x at -> [{xvar = x; xtype = $1} @@ at], [], [] }
+  | inline_import exception_type  /* Sugar */
+    { fun c x at ->
+      [], [{ module_name = fst $1; item_name = snd $1;
+             idesc = ExceptionImport $2 @@ at } @@ at], [] }
+  | inline_export exception_fields  /* Sugar */
+    { fun c x at -> let exns, ims, exs = $2 c x at in
+      exns, ims, $1 (ExceptionExport x) c :: exs }
 
 /* Imports & Exports */
 
@@ -766,9 +784,9 @@ import_desc :
   | LPAR GLOBAL bind_var_opt global_type RPAR
     { fun c -> ignore ($3 c anon_global bind_global);
       fun () -> GlobalImport $4 }
-  | LPAR EXCEPTION bind_var_opt exn_type RPAR
-    { fun c -> ignore ($3 c anon_exn bind_exn);
-      fun () -> ExnImport $4 }
+  | LPAR EXCEPTION bind_var_opt exception_type RPAR
+    { fun c -> ignore ($3 c anon_exception bind_exception);
+      fun () -> ExceptionImport $4 }
 
 import :
   | LPAR IMPORT name name import_desc RPAR
@@ -784,7 +802,7 @@ export_desc :
   | LPAR TABLE var RPAR { fun c -> TableExport ($3 c table) }
   | LPAR MEMORY var RPAR { fun c -> MemoryExport ($3 c memory) }
   | LPAR GLOBAL var RPAR { fun c -> GlobalExport ($3 c global) }
-  | LPAR EXCEPTION var RPAR { fun c -> ExnExport ($3 c exn) }
+  | LPAR EXCEPTION var RPAR { fun c -> ExceptionExport ($3 c exception_) }
 
 export :
   | LPAR EXPORT name export_desc RPAR
@@ -819,6 +837,13 @@ module_fields :
 module_fields1 :
   | type_def module_fields
     { fun c -> ignore ($1 c); $2 c }
+  | exception_ module_fields
+    { fun c -> let emf = $1 c in let mf = $2 c in
+      fun () -> let exns, ims, exs = emf () in let m = mf () in
+      if exns <> [] && m.imports <> [] then
+        error (List.hd m.imports).at "import after exception definition";
+      { m with exceptions = exns @ m.exceptions;
+               imports = ims @ m.imports; exports = exs @ m.exports } }
   | global module_fields
     { fun c -> let gf = $1 c in let mf = $2 c in
       fun () -> let globs, ims, exs = gf () in let m = mf () in
@@ -850,7 +875,7 @@ module_fields1 :
   | elem module_fields
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
-      {m with elems = $1 c :: m.elems} }
+    {m with elems = $1 c :: m.elems} }
   | data module_fields
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
@@ -869,10 +894,6 @@ module_fields1 :
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
       {m with exports = $1 c :: m.exports} }
-  | exn module_fields
-    { fun c -> let mf = $2 c in
-      fun () -> let m = mf () in
-      {m with exns = $1 c :: m.exns} }
 
 module_var_opt :
   | /* empty */ { None }

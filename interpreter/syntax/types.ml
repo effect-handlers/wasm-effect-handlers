@@ -5,19 +5,19 @@ type ref_type = NullRefType | AnyRefType | FuncRefType | ExnRefType
 type value_type = NumType of num_type | RefType of ref_type
 type stack_type = value_type list
 type func_type = FuncType of stack_type * stack_type
+type exception_type = ExceptionType of stack_type * stack_type
 
 type 'a limits = {min : 'a; max : 'a option}
 type mutability = Immutable | Mutable
 type table_type = TableType of Int32.t limits * ref_type
 type memory_type = MemoryType of Int32.t limits
 type global_type = GlobalType of value_type * mutability
-type exn_type = func_type
 type extern_type =
   | ExternFuncType of func_type
   | ExternTableType of table_type
   | ExternMemoryType of memory_type
   | ExternGlobalType of global_type
-  | ExternExnType of exn_type
+  | ExternExceptionType of exception_type
 
 
 (* Attributes *)
@@ -64,7 +64,8 @@ let match_global_type (GlobalType (t1, mut1)) (GlobalType (t2, mut2)) =
   mut1 = mut2 &&
     (t1 = t2 || mut2 = Immutable && match_value_type t1 t2)
 
-let match_exn_type = match_func_type
+let match_exception_type xt1 xt2 =
+  xt1 = xt2
 
 let match_extern_type et1 et2 =
   match et1, et2 with
@@ -72,7 +73,7 @@ let match_extern_type et1 et2 =
   | ExternTableType tt1, ExternTableType tt2 -> match_table_type tt1 tt2
   | ExternMemoryType mt1, ExternMemoryType mt2 -> match_memory_type mt1 mt2
   | ExternGlobalType gt1, ExternGlobalType gt2 -> match_global_type gt1 gt2
-  | ExternExnType et1, ExternExnType et2 -> match_exn_type et1 et2
+  | ExternExceptionType et1, ExternExceptionType et2 -> match_exception_type et1 et2
   | _, _ -> false
 
 
@@ -130,8 +131,8 @@ let memories =
   Lib.List.map_filter (function ExternMemoryType t -> Some t | _ -> None)
 let globals =
   Lib.List.map_filter (function ExternGlobalType t -> Some t | _ -> None)
-let exns =
-  Lib.List.map_filter (function ExternExnType t -> Some t | _ -> None)
+let exceptions =
+  Lib.List.map_filter (function ExternExceptionType t -> Some t | _ -> None)
 
 
 (* String conversion *)
@@ -177,11 +178,12 @@ let string_of_stack_type ts =
 let string_of_func_type (FuncType (ins, out)) =
   string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
 
-let string_of_exn_type = string_of_func_type
+let string_of_exception_type (ExceptionType (ins, out)) =
+  string_of_stack_type ins ^ " -> " ^ string_of_stack_type out
 
 let string_of_extern_type = function
   | ExternFuncType ft -> "func " ^ string_of_func_type ft
   | ExternTableType tt -> "table " ^ string_of_table_type tt
   | ExternMemoryType mt -> "memory " ^ string_of_memory_type mt
   | ExternGlobalType gt -> "global " ^ string_of_global_type gt
-  | ExternExnType et -> "exception " ^ string_of_exn_type et
+  | ExternExceptionType et -> "exception " ^ string_of_exception_type et
