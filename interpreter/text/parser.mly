@@ -64,12 +64,13 @@ let empty_types () = {space = empty (); list = []}
 
 type context =
   { types : types; tables : space; memories : space;
-    funcs : space; locals : space; globals : space; labels : int32 VarMap.t }
+    funcs : space; locals : space; globals : space; labels : int32 VarMap.t;
+    exceptions : space }
 
 let empty_context () =
   { types = empty_types (); tables = empty (); memories = empty ();
     funcs = empty (); locals = empty (); globals = empty ();
-    labels = VarMap.empty }
+    labels = VarMap.empty; exceptions = empty () }
 
 let enter_func (c : context) =
   {c with labels = VarMap.empty; locals = empty ()}
@@ -84,6 +85,7 @@ let local (c : context) x = lookup "local" c.locals x
 let global (c : context) x = lookup "global" c.globals x
 let table (c : context) x = lookup "table" c.tables x
 let memory (c : context) x = lookup "memory" c.memories x
+let exception_ (c : context) x = lookup "exception" c.exceptions x
 let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
@@ -111,6 +113,7 @@ let bind_local (c : context) x = bind "local" c.locals x
 let bind_global (c : context) x = bind "global" c.globals x
 let bind_table (c : context) x = bind "table" c.tables x
 let bind_memory (c : context) x = bind "memory" c.memories x
+let bind_exception (c : context) x = bind "exception" c.exceptions x
 let bind_label (c : context) x =
   {c with labels = VarMap.add x.it 0l (VarMap.map (Int32.add 1l) c.labels)}
 
@@ -130,6 +133,7 @@ let anon_locals (c : context) ts =
 let anon_global (c : context) = anon "global" c.globals 1l
 let anon_table (c : context) = anon "table" c.tables 1l
 let anon_memory (c : context) = anon "memory" c.memories 1l
+let anon_exception (c : context) = anon "exception" c.exceptions 1l
 let anon_label (c : context) =
   {c with labels = VarMap.map (Int32.add 1l) c.labels}
 
@@ -152,7 +156,7 @@ let block_type at (c : context) = function
 %token LPAR RPAR
 %token NAT INT FLOAT STRING VAR
 %token ANYREF FUNCREF EXNREF NUM_TYPE MUT
-%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
+%token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE BR_ON_EXN
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
 %token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
@@ -212,6 +216,7 @@ string_list :
 ref_type :
   | ANYREF { AnyRefType }
   | FUNCREF { FuncRefType }
+  | EXNREF { assert false (* TODO FIXME. *) }
 
 value_type :
   | NUM_TYPE { NumType $1 }
@@ -227,6 +232,18 @@ global_type :
 
 def_type :
   | LPAR FUNC func_type RPAR { $3 }
+
+exception_type :
+  | /* empty */
+    { ExceptionType ([], []) }
+  | LPAR RESULT value_type_list RPAR exception_type
+    { let ExceptionType (ins, out) = $5 in
+      if ins <> [] then error (at ()) "result before parameter";
+      ExceptionType (ins, $3 @ out) }
+  | LPAR PARAM value_type_list RPAR exception_type
+    { let ExceptionType (ins, out) = $5 in ExceptionType ($3 @ ins, out) }
+  | LPAR PARAM bind_var value_type RPAR exception_type  /* Sugar */
+    { let ExceptionType (ins, out) = $6 in ExceptionType ($4 :: ins, out) }
 
 func_type :
   | /* empty */
@@ -322,6 +339,7 @@ plain_instr :
   | BR_TABLE var var_list
     { fun c -> let xs, x = Lib.List.split_last ($2 c label :: $3 c label) in
       br_table xs x }
+  | BR_ON_EXN var var { fun c -> br_on_exn ($2 c label) ($3 c exception_) }
   | RETURN { fun c -> return }
   | CALL var { fun c -> call ($2 c func) }
   | LOCAL_GET var { fun c -> local_get ($2 c local) }
@@ -641,8 +659,7 @@ func_body :
     { fun c -> ignore (bind_local c $3); let f = $6 c in
       {f with locals = $4 :: f.locals} }
 
-
-/* Tables, Memories & Globals */
+/* Tables, Memories, Globals & Exceptions */
 
 offset :
   | LPAR OFFSET const_expr RPAR { $3 }
@@ -731,6 +748,22 @@ global_fields :
     { fun c x at -> let globs, ims, exs = $2 c x at in
       globs, ims, $1 (GlobalExport x) c :: exs }
 
+exception_ :
+  | LPAR EXCEPTION bind_var_opt exception_fields RPAR
+    { let at = at () in
+      fun c -> let x = $3 c anon_exception bind_exception @@ at in
+      fun () -> $4 c x at }
+
+exception_fields :
+  | exception_type
+    { fun c x at -> [{xvar = x; xtype = $1} @@ at], [], [] }
+  | inline_import exception_type  /* Sugar */
+    { fun c x at ->
+      [], [{ module_name = fst $1; item_name = snd $1;
+             idesc = ExceptionImport $2 @@ at } @@ at], [] }
+  | inline_export exception_fields  /* Sugar */
+    { fun c x at -> let exns, ims, exs = $2 c x at in
+      exns, ims, $1 (ExceptionExport x) c :: exs }
 
 /* Imports & Exports */
 
@@ -751,6 +784,9 @@ import_desc :
   | LPAR GLOBAL bind_var_opt global_type RPAR
     { fun c -> ignore ($3 c anon_global bind_global);
       fun () -> GlobalImport $4 }
+  | LPAR EXCEPTION bind_var_opt exception_type RPAR
+    { fun c -> ignore ($3 c anon_exception bind_exception);
+      fun () -> ExceptionImport $4 }
 
 import :
   | LPAR IMPORT name name import_desc RPAR
@@ -766,6 +802,7 @@ export_desc :
   | LPAR TABLE var RPAR { fun c -> TableExport ($3 c table) }
   | LPAR MEMORY var RPAR { fun c -> MemoryExport ($3 c memory) }
   | LPAR GLOBAL var RPAR { fun c -> GlobalExport ($3 c global) }
+  | LPAR EXCEPTION var RPAR { fun c -> ExceptionExport ($3 c exception_) }
 
 export :
   | LPAR EXPORT name export_desc RPAR
@@ -800,6 +837,13 @@ module_fields :
 module_fields1 :
   | type_def module_fields
     { fun c -> ignore ($1 c); $2 c }
+  | exception_ module_fields
+    { fun c -> let emf = $1 c in let mf = $2 c in
+      fun () -> let exns, ims, exs = emf () in let m = mf () in
+      if exns <> [] && m.imports <> [] then
+        error (List.hd m.imports).at "import after exception definition";
+      { m with exceptions = exns @ m.exceptions;
+               imports = ims @ m.imports; exports = exs @ m.exports } }
   | global module_fields
     { fun c -> let gf = $1 c in let mf = $2 c in
       fun () -> let globs, ims, exs = gf () in let m = mf () in

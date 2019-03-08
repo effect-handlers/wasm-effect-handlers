@@ -24,11 +24,13 @@ type context =
   locals : value_type list;
   results : value_type list;
   labels : stack_type list;
+  exceptions : exception_type list;
 }
 
 let empty_context =
   { types = []; funcs = []; tables = []; memories = [];
-    globals = []; locals = []; results = []; labels = [] }
+    globals = []; locals = []; results = []; labels = [];
+    exceptions = [] }
 
 let lookup category list x =
   try Lib.List32.nth list x.it with Failure _ ->
@@ -41,6 +43,7 @@ let memory (c : context) x = lookup "memory" c.memories x
 let global (c : context) x = lookup "global" c.globals x
 let local (c : context) x = lookup "local" c.locals x
 let label (c : context) x = lookup "label" c.labels x
+let exception_ (c : context) x = lookup "exception" c.exceptions x
 
 
 (* Stack typing *)
@@ -353,6 +356,7 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
   | Try _ -> assert false (* TODO FIXME. *)
   | Throw _ -> assert false (* TODO FIXME. *)
   | Rethrow -> assert false (* TODO FIXME. *)
+  | BrOnExn _ -> assert false (* TODO FIXME. *)
 
 and check_seq (c : context) (s : infer_stack_type) (es : instr list)
   : infer_stack_type =
@@ -416,6 +420,11 @@ let check_global_type (gt : global_type) at =
   let GlobalType (t, mut) = gt in
   check_value_type t at
 
+let check_exception_type (xt : exception_type) at =
+  let ExceptionType (ins, out) = xt in
+  List.iter (fun t -> check_value_type t at) ins;
+  require (out = []) at
+    ("type mismatch: exception must have return type " ^ string_of_stack_type [])
 
 let check_type (t : type_) =
   check_func_type t.it t.at
@@ -482,7 +491,6 @@ let check_global (c : context) (glob : global) =
   let GlobalType (t, mut) = gtype in
   check_const c value t
 
-
 (* Modules *)
 
 let check_start (c : context) (start : var option) =
@@ -505,6 +513,9 @@ let check_import (im : import) (c : context) : context =
   | GlobalImport gt ->
     check_global_type gt idesc.at;
     {c with globals = gt :: c.globals}
+  | ExceptionImport et ->
+    check_exception_type et idesc.at;
+    {c with exceptions = et :: c.exceptions}
 
 module NameSet = Set.Make(struct type t = Ast.name let compare = compare end)
 
@@ -515,6 +526,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
   | TableExport x -> ignore (table c x)
   | MemoryExport x -> ignore (memory c x)
   | GlobalExport x -> ignore (global c x)
+  | ExceptionExport x -> ignore (exception_ c x)
   );
   require (not (NameSet.mem name set)) ex.at "duplicate export name";
   NameSet.add name set
@@ -522,7 +534,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
 let check_module (m : module_) =
   let
     { types; imports; tables; memories; globals; funcs; start; elems; data;
-      exports } = m.it
+      exports; exceptions } = m.it
   in
   let c0 =
     List.fold_right check_import imports
@@ -533,6 +545,7 @@ let check_module (m : module_) =
       funcs = c0.funcs @ List.map (fun f -> type_ c0 f.it.ftype) funcs;
       tables = c0.tables @ List.map (fun tab -> tab.it.ttype) tables;
       memories = c0.memories @ List.map (fun mem -> mem.it.mtype) memories;
+      exceptions = c0.exceptions @ List.map (fun exn -> exn.it.xtype) exceptions;
     }
   in
   let c =

@@ -118,7 +118,7 @@ let character =
     [^'"''\\''\x00'-'\x1f''\x7f'-'\xff']
   | utf8enc
   | '\\'escape
-  | '\\'hexdigit hexdigit 
+  | '\\'hexdigit hexdigit
   | "\\u{" hexnum '}'
 
 let nat = num | "0x" hexnum
@@ -162,6 +162,7 @@ rule token = parse
 
   | "anyref" { ANYREF }
   | "funcref" { FUNCREF }
+  | "exnref"  { EXNREF }
   | (nxx as t) { NUM_TYPE (num_type t) }
   | "mut" { MUT }
 
@@ -191,6 +192,7 @@ rule token = parse
   | "br" { BR }
   | "br_if" { BR_IF }
   | "br_table" { BR_TABLE }
+  | "br_on_exn" { BR_ON_EXN }
   | "return" { RETURN }
   | "if" { IF }
   | "then" { THEN }
@@ -198,6 +200,10 @@ rule token = parse
   | "select" { SELECT }
   | "call" { CALL }
   | "call_indirect" { CALL_INDIRECT }
+  | "try" { TRY }
+  | "catch" { CATCH }
+  | "throw" { THROW }
+  | "rethrow" { RETHROW }
 
   | "local.get" { LOCAL_GET }
   | "local.set" { LOCAL_SET }
@@ -339,6 +345,7 @@ rule token = parse
   | "offset" { OFFSET }
   | "import" { IMPORT }
   | "export" { EXPORT }
+  | "exception" { EXCEPTION }
 
   | "module" { MODULE }
   | "binary" { BIN }
@@ -373,12 +380,6 @@ rule token = parse
 
   | reserved { error lexbuf "unknown operator" }
   | utf8 { error lexbuf "malformed operator" }
-
-  | "try" { TRY }
-  | "catch" { CATCH }
-  | "throw" { THROW }
-  | "rethrow" { RETHROW }
-  | "exception" { EXCEPTION }
 
   | _ { error lexbuf "malformed UTF-8 encoding" }
 
