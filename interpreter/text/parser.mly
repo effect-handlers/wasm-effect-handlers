@@ -85,10 +85,10 @@ let local (c : context) x = lookup "local" c.locals x
 let global (c : context) x = lookup "global" c.globals x
 let table (c : context) x = lookup "table" c.tables x
 let memory (c : context) x = lookup "memory" c.memories x
+let exception_ (c : context) x = lookup "exception" c.exceptions x
 let label (c : context) x =
   try VarMap.find x.it c.labels
   with Not_found -> error x.at ("unknown label " ^ x.it)
-let exception_ (c : context) x = lookup "exception" c.exceptions x
 
 let func_type (c : context) x =
   try (Lib.List32.nth c.types.list x.it).it
@@ -113,9 +113,9 @@ let bind_local (c : context) x = bind "local" c.locals x
 let bind_global (c : context) x = bind "global" c.globals x
 let bind_table (c : context) x = bind "table" c.tables x
 let bind_memory (c : context) x = bind "memory" c.memories x
+let bind_exception (c : context) x = bind "exception" c.exceptions x
 let bind_label (c : context) x =
   {c with labels = VarMap.add x.it 0l (VarMap.map (Int32.add 1l) c.labels)}
-let bind_exception (c : context) x = bind "exception" c.exceptions x
 
 let anon category space n =
   let i = space.count in
@@ -133,9 +133,9 @@ let anon_locals (c : context) ts =
 let anon_global (c : context) = anon "global" c.globals 1l
 let anon_table (c : context) = anon "table" c.tables 1l
 let anon_memory (c : context) = anon "memory" c.memories 1l
+let anon_exception (c : context) = anon "exception" c.exceptions 1l
 let anon_label (c : context) =
   {c with labels = VarMap.map (Int32.add 1l) c.labels}
-let anon_exception (c : context) = anon "exception" c.exceptions 1l
 
 let inline_type (c : context) ft at =
   match Lib.List.index_where (fun ty -> ty.it = ft) c.types.list with
@@ -875,7 +875,7 @@ module_fields1 :
   | elem module_fields
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in
-    {m with elems = $1 c :: m.elems} }
+      {m with elems = $1 c :: m.elems} }
   | data module_fields
     { fun c -> let mf = $2 c in
       fun () -> let m = mf () in

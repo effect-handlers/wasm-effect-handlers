@@ -156,8 +156,8 @@ type table_segment = var list segment
 type memory_segment = string segment
 
 (* Exceptions *)
-type exn = exn' Source.phrase
-and exn' =
+type exception_ = exception_' Source.phrase
+and exception_' =
 {
   xvar : var;
   xtype : exception_type
@@ -211,7 +211,7 @@ and module_' =
   data : string segment list;
   imports : import list;
   exports : export list;
-  exceptions : exn list
+  exceptions : exception_ list
 }
 
 
@@ -237,8 +237,8 @@ open Source
 let func_type_for (m : module_) (x : var) : func_type =
   (Lib.List32.nth m.it.types x.it).it
 
-let exn_type_for (m : module_) (x : var) : func_type =
-  (Lib.List32.nth m.it.types x.it).it
+let exception_type_for (m : module_) (x : var) : exception_type =
+  (Lib.List32.nth m.it.exceptions x.it).it.xtype
 
 let import_type (m : module_) (im : import) : extern_type =
   let {idesc; _} = im.it in

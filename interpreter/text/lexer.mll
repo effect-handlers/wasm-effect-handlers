@@ -200,6 +200,10 @@ rule token = parse
   | "select" { SELECT }
   | "call" { CALL }
   | "call_indirect" { CALL_INDIRECT }
+  | "try" { TRY }
+  | "catch" { CATCH }
+  | "throw" { THROW }
+  | "rethrow" { RETHROW }
 
   | "local.get" { LOCAL_GET }
   | "local.set" { LOCAL_SET }
@@ -341,10 +345,6 @@ rule token = parse
   | "offset" { OFFSET }
   | "import" { IMPORT }
   | "export" { EXPORT }
-  | "try" { TRY }
-  | "catch" { CATCH }
-  | "throw" { THROW }
-  | "rethrow" { RETHROW }
   | "exception" { EXCEPTION }
 
   | "module" { MODULE }
