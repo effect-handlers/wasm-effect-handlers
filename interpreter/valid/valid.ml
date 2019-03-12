@@ -52,7 +52,7 @@ let exception_ (c : context) x = lookup "exception" c.exceptions x
  * Note: The declarative typing rules are non-deterministic, that is, they
  * have the liberty to locally "guess" the right types implied by the context.
  * In the algorithmic formulation required here, stack types are hence modelled
- * as lists of _options_ of types here, where `None` representss a locally
+ * as lists of _options_ of types here, where `None` represents a locally
  * unknown type. Furthermore, an ellipses flag represents arbitrary sequences
  * of unknown types, in order to handle stack polymorphism algorithmically.
  *)
@@ -353,10 +353,23 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let t1, t2 = type_cvtop e.at cvtop in
     [NumType t1] --> [NumType t2]
 
-  | Try _ -> assert false (* TODO FIXME. *)
-  | Throw _ -> assert false (* TODO FIXME. *)
-  | Rethrow -> assert false (* TODO FIXME. *)
-  | BrOnExn _ -> assert false (* TODO FIXME. *)
+  | Try (bt, es1, es2) ->
+    let FuncType (ts1, ts2) as ft = check_block_type c bt in
+    check_block {c with labels = ts2 :: c.labels} es1 ft e.at;
+    let exnft = FuncType ([RefType ExnRefType], ts2) in
+    check_block {c with labels = ts2 :: c.labels} es2 exnft e.at;
+    ts1 --> ts2
+  | Throw x ->
+    let ExceptionType (ts1, ts2) = exception_ c x in
+    ts1 --> ts2
+  | Rethrow ->
+    let ts1 = [RefType ExnRefType] in
+    ts1 -->... []
+  | BrOnExn (l, x) ->
+    let ExceptionType (ts1, ts2) = exception_ c x in
+    let ts' = label c l in
+    check_stack (known ts1) (known ts') e.at;
+    [RefType ExnRefType] --> [RefType ExnRefType]
 
 and check_seq (c : context) (s : infer_stack_type) (es : instr list)
   : infer_stack_type =
