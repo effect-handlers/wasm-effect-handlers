@@ -359,12 +359,15 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let exnft = FuncType ([RefType ExnRefType], ts2) in
     check_block {c with labels = ts2 :: c.labels} es2 exnft e.at;
     ts1 --> ts2
+
   | Throw x ->
     let ExceptionType (ts1, ts2) = exception_ c x in
     ts1 --> ts2
+
   | Rethrow ->
     let ts1 = [RefType ExnRefType] in
     ts1 -->... []
+
   | BrOnExn (l, x) ->
     let ExceptionType (ts1, ts2) = exception_ c x in
     let ts' = label c l in
