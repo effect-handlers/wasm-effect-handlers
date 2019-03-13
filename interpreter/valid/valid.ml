@@ -52,7 +52,7 @@ let exception_ (c : context) x = lookup "exception" c.exceptions x
  * Note: The declarative typing rules are non-deterministic, that is, they
  * have the liberty to locally "guess" the right types implied by the context.
  * In the algorithmic formulation required here, stack types are hence modelled
- * as lists of _options_ of types here, where `None` representss a locally
+ * as lists of _options_ of types here, where `None` represents a locally
  * unknown type. Furthermore, an ellipses flag represents arbitrary sequences
  * of unknown types, in order to handle stack polymorphism algorithmically.
  *)
@@ -353,10 +353,25 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     let t1, t2 = type_cvtop e.at cvtop in
     [NumType t1] --> [NumType t2]
 
-  | Try _ -> assert false (* TODO FIXME. *)
-  | Throw _ -> assert false (* TODO FIXME. *)
-  | Rethrow -> assert false (* TODO FIXME. *)
-  | BrOnExn _ -> assert false (* TODO FIXME. *)
+  | Try (bt, es1, es2) ->
+    let FuncType (ts1, ts2) as ft1 = check_block_type c bt in
+    check_block {c with labels = ts2 :: c.labels} es1 ft1 e.at;
+    let ft2 = FuncType ([RefType ExnRefType], ts2) in
+    check_block {c with labels = ts2 :: c.labels} es2 ft2 e.at;
+    ts1 --> ts2
+
+  | Throw x ->
+    let ExceptionType (ts1, _) = exception_ c x in
+    ts1 -->... []
+
+  | Rethrow ->
+    let ts1 = [RefType ExnRefType] in
+    ts1 -->... []
+
+  | BrOnExn (l, x) ->
+    let ExceptionType (ts1, ts2) = exception_ c x in
+    check_stack (known ts1) (known (label c l)) e.at;
+    [RefType ExnRefType] --> [RefType ExnRefType]
 
 and check_seq (c : context) (s : infer_stack_type) (es : instr list)
   : infer_stack_type =
@@ -465,7 +480,7 @@ let check_const (c : context) (const : const) (t : value_type) =
   check_block c const.it (FuncType ([], [t])) const.at
 
 
-(* Tables, Memories, & Globals *)
+(* Tables, Memories, Globals, & Exceptions *)
 
 let check_table (c : context) (tab : table) =
   let {ttype} = tab.it in
@@ -490,6 +505,11 @@ let check_global (c : context) (glob : global) =
   let {gtype; value} = glob.it in
   let GlobalType (t, mut) = gtype in
   check_const c value t
+
+let check_exception (c : context) (exn : exception_) =
+  let {xtype; xvar} = exn.it in
+  ignore (exception_ c xvar);
+  check_exception_type xtype exn.at
 
 (* Modules *)
 
@@ -552,6 +572,7 @@ let check_module (m : module_) =
     { c1 with globals = c1.globals @ List.map (fun g -> g.it.gtype) globals }
   in
   List.iter check_type types;
+  List.iter (check_exception c) exceptions;
   List.iter (check_global c1) globals;
   List.iter (check_table c1) tables;
   List.iter (check_memory c1) memories;
