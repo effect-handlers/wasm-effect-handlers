@@ -507,8 +507,8 @@ let check_global (c : context) (glob : global) =
   check_const c value t
 
 let check_exception (c : context) (exn : exception_) =
-  let { xtype; xvar } = exn.it in
-  let _xt = exception_ c xvar in
+  let {xtype; xvar} = exn.it in
+  ignore (exception_ c xvar);
   check_exception_type xtype exn.at
 
 (* Modules *)
