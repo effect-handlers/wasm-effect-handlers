@@ -354,15 +354,15 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
     [NumType t1] --> [NumType t2]
 
   | Try (bt, es1, es2) ->
-    let FuncType (ts1, ts2) as ft = check_block_type c bt in
-    check_block {c with labels = ts2 :: c.labels} es1 ft e.at;
-    let exnft = FuncType ([RefType ExnRefType], ts2) in
-    check_block {c with labels = ts2 :: c.labels} es2 exnft e.at;
+    let FuncType (ts1, ts2) as ft1 = check_block_type c bt in
+    check_block {c with labels = ts2 :: c.labels} es1 ft1 e.at;
+    let ft2 = FuncType ([RefType ExnRefType], ts2) in
+    check_block {c with labels = ts2 :: c.labels} es2 ft2 e.at;
     ts1 --> ts2
 
   | Throw x ->
-    let ExceptionType (ts1, ts2) = exception_ c x in
-    ts1 --> ts2
+    let ExceptionType (ts1, _) = exception_ c x in
+    ts1 -->... []
 
   | Rethrow ->
     let ts1 = [RefType ExnRefType] in
@@ -370,8 +370,7 @@ let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
 
   | BrOnExn (l, x) ->
     let ExceptionType (ts1, ts2) = exception_ c x in
-    let ts' = label c l in
-    check_stack (known ts1) (known ts') e.at;
+    check_stack (known ts1) (known (label c l)) e.at;
     [RefType ExnRefType] --> [RefType ExnRefType]
 
 and check_seq (c : context) (s : infer_stack_type) (es : instr list)
