@@ -480,7 +480,7 @@ let check_const (c : context) (const : const) (t : value_type) =
   check_block c const.it (FuncType ([], [t])) const.at
 
 
-(* Tables, Memories, & Globals *)
+(* Tables, Memories, Globals, & Exceptions *)
 
 let check_table (c : context) (tab : table) =
   let {ttype} = tab.it in
@@ -505,6 +505,11 @@ let check_global (c : context) (glob : global) =
   let {gtype; value} = glob.it in
   let GlobalType (t, mut) = gtype in
   check_const c value t
+
+let check_exception (c : context) (exn : exception_) =
+  let { xtype; xvar } = exn.it in
+  let _xt = exception_ c xvar in
+  check_exception_type xtype exn.at
 
 (* Modules *)
 
@@ -567,6 +572,7 @@ let check_module (m : module_) =
     { c1 with globals = c1.globals @ List.map (fun g -> g.it.gtype) globals }
   in
   List.iter check_type types;
+  List.iter (check_exception c) exceptions;
   List.iter (check_global c1) globals;
   List.iter (check_table c1) tables;
   List.iter (check_memory c1) memories;
