@@ -183,7 +183,7 @@ let rec step (c : config) : config =
       | BrTable (xs, x), Num (I32 i) :: vs' ->
         vs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
 
-      | BrOnExn (l, x), Ref (ExnRef (exn, vs0)) :: vs' when exn = exception_ frame.inst x ->
+      | BrOnExn (l, x), Ref (ExnRef (exn, vs0)) :: vs' when exn == exception_ frame.inst x ->
         vs0, [Plain (Br l) @@ e.at]
 
       | BrOnExn (l, x), vs ->
