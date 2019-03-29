@@ -1,9 +1,11 @@
 open Types
-(* open Values *)
+open Values
 
-type t = ExceptionPackage of exception_type (* TODO FIXME. *)
+type t = Exception of exn * exception_type
+type package = t * value list
 
-let alloc xtype =
-  ExceptionPackage xtype
+let alloc xt =
+  let exception E in
+  Exception (E, xt)
 
-let type_of (ExceptionPackage xtype) = xtype
+let type_of (Exception (_, xt)) = xt

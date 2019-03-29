@@ -29,7 +29,7 @@ and extern =
 (* Reference type extensions *)
 
 type Values.ref_ += FuncRef of func_inst
-type Values.ref_ += ExceptionRef of exception_inst
+type Values.ref_ += ExnRef of Exception.package
 
 let () =
   let type_of_ref' = !Values.type_of_ref' in

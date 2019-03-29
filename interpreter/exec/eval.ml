@@ -61,11 +61,11 @@ and admin_instr' =
   | Invoke of func_inst
   | Trapping of string
   | Returning of value stack
-  | Catch of int32 * code * code
-  | Throwing of int32
   | Breaking of int32 * value stack
+  | Throwing of Exception.package
   | Label of int32 * instr list * code
   | Frame of int32 * frame * code
+  | Catch of int32 * instr list * code
 
 type config =
 {
@@ -107,7 +107,7 @@ let func_type_of = function
 
 let _exception_ref inst x i at =
   match any_ref inst x i at with
-  | ExceptionRef exn -> exn
+  | ExnRef exn -> exn
   | NullRef -> Trap.error at ("uninitialized element " ^ Int32.to_string i)
   | _ -> Crash.error at ("type mismatch for element " ^ Int32.to_string i)
 
@@ -304,17 +304,20 @@ let rec step (c : config) : config =
 
       | Try (bt, es1, es2), vs ->
         let FuncType (ts1, ts2) = block_type frame.inst bt in
-        let n = Lib.List32.length ts2 in
-        let es1' = [Label (n, [], (vs, List.map plain es1)) @@ e.at] in
-        let es2' = List.map plain es2 in
-        [], [Catch (n, ([], es2'), ([], es1')) @@ e.at]
+        let n1 = Lib.List32.length ts1 in
+        let n2 = Lib.List32.length ts2 in
+        let args, vs' = take n1 vs e.at, drop n1 vs e.at in
+        vs', [Catch (n2, es2, ([], [Label (n2, [], (args, List.map plain es1)) @@ e.at])) @@ e.at]
 
       | Throw x, vs ->
-        let _a = exception_ frame.inst x in
-        vs, [Throwing (assert false) @@ e.at] (* TODO FIXME. *)
+        let exn = exception_ frame.inst x in
+        let ExceptionType (ts, _) = Exception.type_of exn in
+        let n = Lib.List32.length ts in
+        let args, vs' = take n vs e.at, drop n vs e.at in
+        vs', [Throwing (exn, List.rev args) @@ e.at]
 
-      | Rethrow, Ref (ExceptionRef exn) :: vs ->
-        vs, [Throwing (assert false) @@ e.at] (* TODO FIXME. *)
+      | Rethrow, Ref (ExnRef ep) :: vs ->
+        vs, [Throwing ep @@ e.at]
 
       | _ ->
         let s1 = string_of_values (List.rev vs) in
@@ -332,17 +335,14 @@ let rec step (c : config) : config =
     | Breaking (k, vs'), vs ->
       Crash.error e.at "undefined label"
 
+    | Throwing _, _ ->
+      Uncaught.error e.at "uncaught exception"
+
     | Label (n, es0, (vs', [])), vs ->
       vs' @ vs, []
 
-    | Label (n, es0, (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
-
-    | Label (n, es0, (vs', {it = Throwing a; at} :: es')), vs ->
-      vs, [Throwing a @@ at]
-
-    | Label (n, es0, (vs', {it = Returning vs0; at} :: es')), vs ->
-      vs, [Returning vs0 @@ at]
+    | Label (_, _, (_, ({it = Trapping _ | Throwing _ | Returning _; _} as e) :: _)), vs ->
+      vs, [e]
 
     | Label (n, es0, (vs', {it = Breaking (0l, vs0); at} :: es')), vs ->
       take n vs0 e.at @ vs, List.map plain es0
@@ -357,11 +357,8 @@ let rec step (c : config) : config =
     | Frame (n, frame', (vs', [])), vs ->
       vs' @ vs, []
 
-    | Frame (n, frame', (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
-
-    | Frame (n, frame', (vs', {it = Throwing a; at} :: es')), vs ->
-      vs, [Throwing a @@ at]
+    | Frame (_, _, (_, ({it = Trapping _ | Throwing _; _} as e) :: _)), vs ->
+      vs, [e]
 
     | Frame (n, frame', (vs', {it = Returning vs0; at} :: es')), vs ->
       take n vs0 e.at @ vs, []
@@ -389,21 +386,15 @@ let rec step (c : config) : config =
         with Crash (_, msg) -> Crash.error e.at msg
       )
 
-    | Catch (_, _, (_, {it = Trapping msg; at} :: _)), vs ->
-      vs, [Trapping msg @@ at]
+    | Catch (_, _, (_, ({it = Trapping _ | Breaking _ | Returning _; _} as e) :: _)), vs ->
+      vs, [e]
 
-    | Catch (n, (vs', es1), (_, { it = Throwing a; at} :: _)), vs ->
-      vs, [Label (n, [], (Ref (ExceptionRef (assert false)) :: vs', es1)) @@ e.at] (* TODO FIXME. *)
-
-    | Catch (n, _, (vs', {it = Returning vs0; at} :: es')), vs ->
-      take n vs0 e.at @ vs, []
+    | Catch (n, es1, (_, { it = Throwing ep; at} :: _)), vs ->
+      vs, [Label (n, [], ([Ref (ExnRef ep)], List.map plain es1)) @@ e.at]
 
     | Catch (n, es', code'), vs ->
       let c' = step {c with code = code'} in
       vs, [Catch (n, es', c'.code) @@ e.at]
-
-    | Throwing _, _ ->
-      Uncaught.error e.at "uncaught exception"
 
   in {c with code = vs', es' @ List.tl es}
 
