@@ -11,6 +11,7 @@ module Link = Error.Make ()
 module Trap = Error.Make ()
 module Crash = Error.Make ()
 module Exhaustion = Error.Make ()
+module Uncaught = Error.Make ()
 
 exception Link = Link.Error
 exception Trap = Trap.Error
@@ -61,8 +62,10 @@ and admin_instr' =
   | Trapping of string
   | Returning of value stack
   | Breaking of int32 * value stack
+  | Throwing of Exception.package
   | Label of int32 * instr list * code
   | Frame of int32 * frame * code
+  | Catch of int32 * instr list * code
 
 type config =
 {
@@ -85,6 +88,7 @@ let func (inst : module_inst) x = lookup "function" inst.funcs x
 let table (inst : module_inst) x = lookup "table" inst.tables x
 let memory (inst : module_inst) x = lookup "memory" inst.memories x
 let global (inst : module_inst) x = lookup "global" inst.globals x
+let exception_ (inst : module_inst) x = lookup "exception" inst.exceptions x
 let local (frame : frame) x = lookup "local" frame.locals x
 
 let any_ref inst x i at =
@@ -100,6 +104,12 @@ let func_ref inst x i at =
 let func_type_of = function
   | Func.AstFunc (t, inst, f) -> t
   | Func.HostFunc (t, _) -> t
+
+let _exception_ref inst x i at =
+  match any_ref inst x i at with
+  | ExnRef exn -> exn
+  | NullRef -> Trap.error at ("uninitialized element " ^ Int32.to_string i)
+  | _ -> Crash.error at ("type mismatch for element " ^ Int32.to_string i)
 
 let block_type inst bt =
   match bt with
@@ -151,17 +161,11 @@ let rec step (c : config) : config =
         let args, vs' = take n1 vs e.at, drop n1 vs e.at in
         vs', [Label (n1, [e' @@ e.at], (args, List.map plain es')) @@ e.at]
 
-      | If (ts, es1, es2), Num (I32 0l) :: vs' ->
-        vs', [Plain (Block (ts, es2)) @@ e.at]
+      | If (bt, es1, es2), Num (I32 0l) :: vs' ->
+        vs', [Plain (Block (bt, es2)) @@ e.at]
 
-      | If (ts, es1, es2), Num (I32 i) :: vs' ->
-         vs', [Plain (Block (ts, es1)) @@ e.at]
-
-      (* | If (bt, es1, es2), I32 0l :: vs' ->
-       *   vs', [Plain (Block (bt, es2)) @@ e.at]
-       * 
-       * | If (bt, es1, es2), I32 i :: vs' ->
-       *   vs', [Plain (Block (bt, es1)) @@ e.at] *)
+      | If (bt, es1, es2), Num (I32 i) :: vs' ->
+         vs', [Plain (Block (bt, es1)) @@ e.at]
 
       | Br x, vs ->
         [], [Breaking (x.it, vs) @@ e.at]
@@ -178,6 +182,12 @@ let rec step (c : config) : config =
 
       | BrTable (xs, x), Num (I32 i) :: vs' ->
         vs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
+
+      | BrOnExn (l, x), Ref (ExnRef (exn, vs0)) :: vs' when exn == exception_ frame.inst x ->
+        vs0, [Plain (Br l) @@ e.at]
+
+      | BrOnExn (l, x), vs ->
+        vs, []
 
       | Return, vs ->
         vs, [Returning vs @@ e.at]
@@ -298,6 +308,23 @@ let rec step (c : config) : config =
         (try Num (Eval_numeric.eval_cvtop cvtop n) :: vs', []
         with exn -> vs', [Trapping (numeric_error e.at exn) @@ e.at])
 
+      | Try (bt, es1, es2), vs ->
+        let FuncType (ts1, ts2) = block_type frame.inst bt in
+        let n1 = Lib.List32.length ts1 in
+        let n2 = Lib.List32.length ts2 in
+        let args, vs' = take n1 vs e.at, drop n1 vs e.at in
+        vs', [Catch (n2, es2, ([], [Label (n2, [], (args, List.map plain es1)) @@ e.at])) @@ e.at]
+
+      | Throw x, vs ->
+        let exn = exception_ frame.inst x in
+        let ExceptionType (ts, _) = Exception.type_of exn in
+        let n = Lib.List32.length ts in
+        let args, vs' = take n vs e.at, drop n vs e.at in
+        vs', [Throwing (exn, List.rev args) @@ e.at]
+
+      | Rethrow, Ref (ExnRef ep) :: vs ->
+        vs, [Throwing ep @@ e.at]
+
       | _ ->
         let s1 = string_of_values (List.rev vs) in
         let s2 = string_of_value_types (List.map type_of_value (List.rev vs)) in
@@ -314,14 +341,14 @@ let rec step (c : config) : config =
     | Breaking (k, vs'), vs ->
       Crash.error e.at "undefined label"
 
+    | Throwing _, _ ->
+      Uncaught.error e.at "uncaught exception"
+
     | Label (n, es0, (vs', [])), vs ->
       vs' @ vs, []
 
-    | Label (n, es0, (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
-
-    | Label (n, es0, (vs', {it = Returning vs0; at} :: es')), vs ->
-      vs, [Returning vs0 @@ at]
+    | Label (_, _, (_, ({it = Trapping _ | Throwing _ | Returning _; _} as e) :: _)), vs ->
+      vs, [e]
 
     | Label (n, es0, (vs', {it = Breaking (0l, vs0); at} :: es')), vs ->
       take n vs0 e.at @ vs, List.map plain es0
@@ -336,8 +363,8 @@ let rec step (c : config) : config =
     | Frame (n, frame', (vs', [])), vs ->
       vs' @ vs, []
 
-    | Frame (n, frame', (vs', {it = Trapping msg; at} :: es')), vs ->
-      vs, [Trapping msg @@ at]
+    | Frame (_, _, (_, ({it = Trapping _ | Throwing _; _} as e) :: _)), vs ->
+      vs, [e]
 
     | Frame (n, frame', (vs', {it = Returning vs0; at} :: es')), vs ->
       take n vs0 e.at @ vs, []
@@ -364,6 +391,17 @@ let rec step (c : config) : config =
         try List.rev (f (List.rev args)) @ vs', []
         with Crash (_, msg) -> Crash.error e.at msg
       )
+
+    | Catch (_, _, (_, ({it = Trapping _ | Breaking _ | Returning _; _} as e) :: _)), vs ->
+      vs, [e]
+
+    | Catch (n, es1, (_, { it = Throwing ep; at} :: _)), vs ->
+      vs, [Label (n, [], ([Ref (ExnRef ep)], List.map plain es1)) @@ e.at]
+
+    | Catch (n, es', code'), vs ->
+      let c' = step {c with code = code'} in
+      vs, [Catch (n, es', c'.code) @@ e.at]
+
   in {c with code = vs', es' @ List.tl es}
 
 
@@ -420,6 +458,10 @@ let create_global (inst : module_inst) (glob : global) : global_inst =
   let v = eval_const inst value in
   Global.alloc gtype v
 
+let create_exception (inst : module_inst) (exn : exception_) : exception_inst =
+  let {xtype; _} = exn.it in
+  Exception.alloc xtype (* TODO FIXME. *)
+
 let create_export (inst : module_inst) (ex : export) : export_inst =
   let {name; edesc} = ex.it in
   let ext =
@@ -469,6 +511,7 @@ let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
   | ExternTable tab -> {inst with tables = tab :: inst.tables}
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}
   | ExternGlobal glob -> {inst with globals = glob :: inst.globals}
+  | ExternException exn -> {inst with exceptions = exn :: inst.exceptions}
 
 let init (m : module_) (exts : extern list) : module_inst =
   let
@@ -489,6 +532,7 @@ let init (m : module_) (exts : extern list) : module_inst =
       tables = inst1.tables @ List.map (create_table inst1) tables;
       memories = inst1.memories @ List.map (create_memory inst1) memories;
       globals = inst1.globals @ List.map (create_global inst1) globals;
+      exceptions = inst1.exceptions @ List.map (create_exception inst1) exceptions;
     }
   in
   let inst = {inst2 with exports = List.map (create_export inst2) exports} in
