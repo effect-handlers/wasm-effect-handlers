@@ -159,7 +159,7 @@ Reference Instructions
    \begin{array}{llclll}
    \production{instruction} & \Tplaininstr_I &::=& \dots \\ &&|&
      \text{ref.null} &\Rightarrow& \REFNULL \\ &&|&
-     \text{ref.is\_null} &\Rightarrow& \REFISNULL \\
+     \text{ref.is\_null} &\Rightarrow& \REFISNULL \\ &&|&
      \text{ref.func}~~x{:}\Tfuncidx &\Rightarrow& \REFFUNC~x \\ &&|&
    \end{array}
 
@@ -178,7 +178,7 @@ Parametric Instructions
    \begin{array}{llclll}
    \production{instruction} & \Tplaininstr_I &::=& \dots \\ &&|&
      \text{drop} &\Rightarrow& \DROP \\ &&|&
-     \text{select} &\Rightarrow& \SELECT \\
+     \text{select}~((t{:}\Tresult)^\ast)^? &\Rightarrow& \SELECT~(t^\ast)^? \\
    \end{array}
 
 
@@ -206,7 +206,7 @@ Variable Instructions
    \end{array}
 
 
-.. index:: table instructions, table index
+.. index:: table instruction, table index
    pair: text format; instruction
 .. _text-instr-table:
 
@@ -215,12 +215,42 @@ Table Instructions
 
 .. _text-table.get:
 .. _text-table.set:
+.. _text-table.size:
+.. _text-table.grow:
+.. _text-table.fill:
+.. _text-table.copy:
+.. _text-table.init:
+.. _text-elem.drop:
 
 .. math::
    \begin{array}{llclll}
    \production{instruction} & \Tplaininstr_I &::=& \dots \\ &&|&
      \text{table.get}~~x{:}\Ttableidx_I &\Rightarrow& \TABLEGET~x \\ &&|&
-     \text{table.set}~~x{:}\Ttableidx_I &\Rightarrow& \TABLESET~x \\
+     \text{table.set}~~x{:}\Ttableidx_I &\Rightarrow& \TABLESET~x \\ &&|&
+     \text{table.size}~~x{:}\Ttableidx_I &\Rightarrow& \TABLESIZE~x \\ &&|&
+     \text{table.grow}~~x{:}\Ttableidx_I &\Rightarrow& \TABLEGROW~x \\ &&|&
+     \text{table.fill}~~x{:}\Ttableidx_I &\Rightarrow& \TABLEFILL~x \\
+     \text{table.copy}~~x{:}\Ttableidx_I~~y{:}\Ttableidx_I &\Rightarrow& \TABLECOPY~x~y \\ &&|&
+     \text{table.init}~~x{:}\Ttableidx_I~~y{:}\Telemidx_I &\Rightarrow& \TABLEINIT~x~y \\ &&|&
+     \text{elem.drop}~~x{:}\Telemidx_I &\Rightarrow& \ELEMDROP~x \\
+   \end{array}
+
+
+Abbreviations
+.............
+
+For backwards compatibility, all :math:`table indices <syntax-tableidx>` may be omitted from table instructions, defaulting to :math:`0`.
+
+.. math::
+   \begin{array}{llclll}
+   \production{instruction} &
+     \text{table.get} &\equiv& \text{table.get}~~\text{0} \\ &&|&
+     \text{table.set} &\equiv& \text{table.set}~~\text{0} \\ &&|&
+     \text{table.size} &\equiv& \text{table.size}~~\text{0} \\ &&|&
+     \text{table.grow} &\equiv& \text{table.grow}~~\text{0} \\ &&|&
+     \text{table.fill} &\equiv& \text{table.fill}~~\text{0} \\ &&|&
+     \text{table.copy} &\equiv& \text{table.copy}~~\text{0}~~\text{0} \\ &&|&
+     \text{table.init}~~x{:}\Telemidx_I &\equiv& \text{table.init}~~\text{0}~~x{:}\Telemidx_I \\ &&|&
    \end{array}
 
 
@@ -238,6 +268,10 @@ Memory Instructions
 .. _text-storen:
 .. _text-memory.size:
 .. _text-memory.grow:
+.. _text-memory.fill:
+.. _text-memory.copy:
+.. _text-memory.init:
+.. _text-data.drop:
 
 The offset and alignment immediates to memory instructions are optional.
 The offset defaults to :math:`\T{0}`, the alignment to the storage size of the respective memory access, which is its *natural alignment*.
@@ -278,7 +312,11 @@ Lexically, an |Toffset| or |Talign| phrase is considered a single :ref:`keyword 
      \text{i64.store16}~~m{:}\Tmemarg_2 &\Rightarrow& \I64.\STORE\K{16}~m \\ &&|&
      \text{i64.store32}~~m{:}\Tmemarg_4 &\Rightarrow& \I64.\STORE\K{32}~m \\ &&|&
      \text{memory.size} &\Rightarrow& \MEMORYSIZE \\ &&|&
-     \text{memory.grow} &\Rightarrow& \MEMORYGROW \\
+     \text{memory.grow} &\Rightarrow& \MEMORYGROW \\ &&|&
+     \text{memory.fill} &\Rightarrow& \MEMORYFILL \\ &&|&
+     \text{memory.copy} &\Rightarrow& \MEMORYCOPY \\ &&|&
+     \text{memory.init}~~x{:}\Tdataidx_I &\Rightarrow& \MEMORYINIT~x \\ &&|&
+     \text{data.drop}~~x{:}\Tdataidx_I &\Rightarrow& \DATADROP~x \\
    \end{array}
 
 
@@ -512,12 +550,12 @@ Such a folded instruction can appear anywhere a regular instruction can.
    For example, the instruction sequence
 
    .. math::
-      \mathtt{(get\_local~\$x)~(i32.const~2)~i32.add~(i32.const~3)~i32.mul}
+      \mathtt{(local.get~\$x)~(i32.const~2)~i32.add~(i32.const~3)~i32.mul}
 
    can be folded into
 
    .. math::
-      \mathtt{(i32.mul~(i32.add~(get\_local~\$x)~(i32.const~2))~(i32.const~3))}
+      \mathtt{(i32.mul~(i32.add~(local.get~\$x)~(i32.const~2))~(i32.const~3))}
 
    Folded instructions are solely syntactic sugar,
    no additional syntactic or type-based checking is implied.

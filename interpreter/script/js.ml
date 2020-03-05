@@ -7,175 +7,168 @@ open Source
 (* Harness *)
 
 let harness =
-  "'use strict';\n" ^
-  "\n" ^
-  "let hostrefs = {};\n" ^
-  "let hostsym = Symbol(\"hostref\");\n" ^
-  "function hostref(s) {\n" ^
-  "  if (! (s in hostrefs)) hostrefs[s] = {[hostsym]: s};\n" ^
-  "  return hostrefs[s];\n" ^
-  "}\n" ^
-  "function is_hostref(x) {\n" ^
-  "  return (x !== null && hostsym in x) ? 1 : 0;\n" ^
-  "}\n" ^
-  "function is_funcref(x) {\n" ^
-  "  return typeof x === \"function\" ? 1 : 0;\n" ^
-  "}\n" ^
-  "\n" ^
-  "let spectest = {\n" ^
-  "  hostref: hostref,\n" ^
-  "  is_hostref: is_hostref,\n" ^
-  "  is_funcref: is_funcref,\n" ^
-  "  print: console.log.bind(console),\n" ^
-  "  print_i32: console.log.bind(console),\n" ^
-  "  print_i32_f32: console.log.bind(console),\n" ^
-  "  print_f64_f64: console.log.bind(console),\n" ^
-  "  print_f32: console.log.bind(console),\n" ^
-  "  print_f64: console.log.bind(console),\n" ^
-  "  global_i32: 666,\n" ^
-  "  global_f32: 666,\n" ^
-  "  global_f64: 666,\n" ^
-  "  table: new WebAssembly.Table({initial: 10, maximum: 20, element: 'anyfunc'}),\n" ^
-  "  memory: new WebAssembly.Memory({initial: 1, maximum: 2})\n" ^
-  "};\n" ^
-  "\n" ^
-  "let handler = {\n" ^
-  "  get(target, prop) {\n" ^
-  "    return (prop in target) ?  target[prop] : {};\n" ^
-  "  }\n" ^
-  "};\n" ^
-  "let registry = new Proxy({spectest}, handler);\n" ^
-  "\n" ^
-  "function register(name, instance) {\n" ^
-  "  registry[name] = instance.exports;\n" ^
-  "}\n" ^
-  "\n" ^
-  "function module(bytes, valid = true) {\n" ^
-  "  let buffer = new ArrayBuffer(bytes.length);\n" ^
-  "  let view = new Uint8Array(buffer);\n" ^
-  "  for (let i = 0; i < bytes.length; ++i) {\n" ^
-  "    view[i] = bytes.charCodeAt(i);\n" ^
-  "  }\n" ^
-  "  let validated;\n" ^
-  "  try {\n" ^
-  "    validated = WebAssembly.validate(buffer);\n" ^
-  "  } catch (e) {\n" ^
-  "    throw new Error(\"Wasm validate throws\");\n" ^
-  "  }\n" ^
-  "  if (validated !== valid) {\n" ^
-  "    throw new Error(\"Wasm validate failure\" + " ^
-  "(valid ? \"\" : \" expected\"));\n" ^
-  "  }\n" ^
-  "  return new WebAssembly.Module(buffer);\n" ^
-  "}\n" ^
-  "\n" ^
-  "function instance(bytes, imports = registry) {\n" ^
-  "  return new WebAssembly.Instance(module(bytes), imports);\n" ^
-  "}\n" ^
-  "\n" ^
-  "function call(instance, name, args) {\n" ^
-  "  return instance.exports[name](...args);\n" ^
-  "}\n" ^
-  "\n" ^
-  "function get(instance, name) {\n" ^
-  "  let v = instance.exports[name];\n" ^
-  "  return (v instanceof WebAssembly.Global) ? v.value : v;\n" ^
-  "}\n" ^
-  "\n" ^
-  "function exports(instance) {\n" ^
-  "  return {module: instance.exports, host: {ref: hostref}};\n" ^
-  "}\n" ^
-  "\n" ^
-  "function run(action) {\n" ^
-  "  action();\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_malformed(bytes) {\n" ^
-  "  try { module(bytes, false) } catch (e) {\n" ^
-  "    if (e instanceof WebAssembly.CompileError) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm decoding failure expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_invalid(bytes) {\n" ^
-  "  try { module(bytes, false) } catch (e) {\n" ^
-  "    if (e instanceof WebAssembly.CompileError) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm validation failure expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_unlinkable(bytes) {\n" ^
-  "  let mod = module(bytes);\n" ^
-  "  try { new WebAssembly.Instance(mod, registry) } catch (e) {\n" ^
-  "    if (e instanceof WebAssembly.LinkError) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm linking failure expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_uninstantiable(bytes) {\n" ^
-  "  let mod = module(bytes);\n" ^
-  "  try { new WebAssembly.Instance(mod, registry) } catch (e) {\n" ^
-  "    if (e instanceof WebAssembly.RuntimeError) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm trap expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_trap(action) {\n" ^
-  "  try { action() } catch (e) {\n" ^
-  "    if (e instanceof WebAssembly.RuntimeError) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm trap expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "let StackOverflow;\n" ^
-  "try { (function f() { 1 + f() })() } catch (e) { StackOverflow = e.constructor }\n" ^
-  "\n" ^
-  "function assert_exhaustion(action) {\n" ^
-  "  try { action() } catch (e) {\n" ^
-  "    if (e instanceof StackOverflow) return;\n" ^
-  "  }\n" ^
-  "  throw new Error(\"Wasm resource exhaustion expected\");\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_return(action, expected) {\n" ^
-  "  let actual = action();\n" ^
-  "  if (!Object.is(actual, expected)) {\n" ^
-  "    throw new Error(\"Wasm return value \" + expected + \" expected, got \" + actual);\n" ^
-  "  };\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_return_canonical_nan(action) {\n" ^
-  "  let actual = action();\n" ^
-  "  // Note that JS can't reliably distinguish different NaN values,\n" ^
-  "  // so there's no good way to test that it's a canonical NaN.\n" ^
-  "  if (!Number.isNaN(actual)) {\n" ^
-  "    throw new Error(\"Wasm return value NaN expected, got \" + actual);\n" ^
-  "  };\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_return_arithmetic_nan(action) {\n" ^
-  "  // Note that JS can't reliably distinguish different NaN values,\n" ^
-  "  // so there's no good way to test for specific bitpatterns here.\n" ^
-  "  let actual = action();\n" ^
-  "  if (!Number.isNaN(actual)) {\n" ^
-  "    throw new Error(\"Wasm return value NaN expected, got \" + actual);\n" ^
-  "  };\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_return_ref(action) {\n" ^
-  "  let actual = action();\n" ^
-  "  if (actual === null || typeof actual !== \"object\" && typeof actual !== \"function\") {\n" ^
-  "    throw new Error(\"Wasm reference return value expected, got \" + actual);\n" ^
-  "  };\n" ^
-  "}\n" ^
-  "\n" ^
-  "function assert_return_func(action) {\n" ^
-  "  let actual = action();\n" ^
-  "  if (typeof actual !== \"function\") {\n" ^
-  "    throw new Error(\"Wasm function return value expected, got \" + actual);\n" ^
-  "  };\n" ^
-  "}\n" ^
-  "\n"
+{|
+'use strict';
+
+let hostrefs = {};
+let hostsym = Symbol("hostref");
+function hostref(s) {
+  if (! (s in hostrefs)) hostrefs[s] = {[hostsym]: s};
+  return hostrefs[s];
+}
+function is_hostref(x) {
+  return (x !== null && hostsym in x) ? 1 : 0;
+}
+function is_funcref(x) {
+  return typeof x === "function" ? 1 : 0;
+}
+function eq_ref(x, y) {
+  return x === y ? 1 : 0;
+}
+
+let spectest = {
+  hostref: hostref,
+  is_hostref: is_hostref,
+  is_funcref: is_funcref,
+  eq_ref: eq_ref,
+  print: console.log.bind(console),
+  print_i32: console.log.bind(console),
+  print_i32_f32: console.log.bind(console),
+  print_f64_f64: console.log.bind(console),
+  print_f32: console.log.bind(console),
+  print_f64: console.log.bind(console),
+  global_i32: 666,
+  global_f32: 666,
+  global_f64: 666,
+  table: new WebAssembly.Table({initial: 10, maximum: 20, element: 'anyfunc'}),
+  memory: new WebAssembly.Memory({initial: 1, maximum: 2})
+};
+
+let handler = {
+  get(target, prop) {
+    return (prop in target) ?  target[prop] : {};
+  }
+};
+let registry = new Proxy({spectest}, handler);
+
+function register(name, instance) {
+  registry[name] = instance.exports;
+}
+
+function module(bytes, valid = true) {
+  let buffer = new ArrayBuffer(bytes.length);
+  let view = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; ++i) {
+    view[i] = bytes.charCodeAt(i);
+  }
+  let validated;
+  try {
+    validated = WebAssembly.validate(buffer);
+  } catch (e) {
+    throw new Error("Wasm validate throws");
+  }
+  if (validated !== valid) {
+    throw new Error("Wasm validate failure" + (valid ? "" : " expected"));
+  }
+  return new WebAssembly.Module(buffer);
+}
+
+function instance(bytes, imports = registry) {
+  return new WebAssembly.Instance(module(bytes), imports);
+}
+
+function call(instance, name, args) {
+  return instance.exports[name](...args);
+}
+
+function get(instance, name) {
+  let v = instance.exports[name];
+  return (v instanceof WebAssembly.Global) ? v.value : v;
+}
+
+function exports(instance) {
+  return {module: instance.exports, spectest: spectest};
+}
+
+function run(action) {
+  action();
+}
+
+function assert_malformed(bytes) {
+  try { module(bytes, false) } catch (e) {
+    if (e instanceof WebAssembly.CompileError) return;
+  }
+  throw new Error("Wasm decoding failure expected");
+}
+
+function assert_invalid(bytes) {
+  try { module(bytes, false) } catch (e) {
+    if (e instanceof WebAssembly.CompileError) return;
+  }
+  throw new Error("Wasm validation failure expected");
+}
+
+function assert_unlinkable(bytes) {
+  let mod = module(bytes);
+  try { new WebAssembly.Instance(mod, registry) } catch (e) {
+    if (e instanceof WebAssembly.LinkError) return;
+  }
+  throw new Error("Wasm linking failure expected");
+}
+
+function assert_uninstantiable(bytes) {
+  let mod = module(bytes);
+  try { new WebAssembly.Instance(mod, registry) } catch (e) {
+    if (e instanceof WebAssembly.RuntimeError) return;
+  }
+  throw new Error("Wasm trap expected");
+}
+
+function assert_trap(action) {
+  try { action() } catch (e) {
+    if (e instanceof WebAssembly.RuntimeError) return;
+  }
+  throw new Error("Wasm trap expected");
+}
+
+let StackOverflow;
+try { (function f() { 1 + f() })() } catch (e) { StackOverflow = e.constructor }
+
+function assert_exhaustion(action) {
+  try { action() } catch (e) {
+    if (e instanceof StackOverflow) return;
+  }
+  throw new Error("Wasm resource exhaustion expected");
+}
+
+function assert_return(action, expected) {
+  let actual = action();
+  switch (expected) {
+    case "nan:canonical":
+    case "nan:arithmetic":
+      // Note that JS can't reliably distinguish different NaN values,
+      // so there's no good way to test that it's a canonical NaN.
+      if (!Number.isNaN(actual)) {
+        throw new Error("Wasm NaN return value expected, got " + actual);
+      };
+      return;
+    case "ref.func":
+      if (typeof actual !== "function") {
+        throw new Error("Wasm function return value expected, got " + actual);
+      };
+      return;
+    case "ref.any":
+      if (actual === null) {
+        throw new Error("Wasm reference return value expected, got " + actual);
+      };
+      return;
+    default:
+      if (!Object.is(actual, expected)) {
+        throw new Error("Wasm return value " + expected + " expected, got " + actual);
+      };
+  }
+}
+|}
 
 
 (* Context *)
@@ -266,33 +259,41 @@ let get t at =
 let run ts at =
   [], []
 
-let assert_return vs ts at =
-  let test v =
-    match v.it with
-    | Values.Num num ->
+let assert_return ress ts at =
+  let test res =
+    match res.it with
+    | LitResult {it = Values.Num num; at = at'} ->
       let t', reinterpret = reinterpret_of (Values.type_of_num num) in
       [ reinterpret @@ at;
-        Const (num @@ v.at) @@ at;
+        Const (num @@ at')  @@ at;
         reinterpret @@ at;
         Compare (eq_of t') @@ at;
         Test (Values.I32 I32Op.Eqz) @@ at;
         BrIf (0l @@ at) @@ at ]
-    | Values.Ref Values.NullRef ->
+    | LitResult {it = Values.Ref Values.NullRef; _} ->
       [ RefIsNull @@ at;
         Test (Values.I32 I32Op.Eqz) @@ at;
         BrIf (0l @@ at) @@ at ]
-    | Values.Ref (HostRef n) ->
+    | LitResult {it = Values.Ref (HostRef n); _} ->
       [ Const (Values.I32 n @@ at) @@ at;
         Call (hostref_idx @@ at) @@ at;
         Call (eq_ref_idx @@ at)  @@ at;
         Test (Values.I32 I32Op.Eqz) @@ at;
         BrIf (0l @@ at) @@ at ]
-    | _ -> assert false
-  in [], List.flatten (List.rev_map test vs)
-
-let assert_return_nan_bitpattern nan_bitmask_of ts at =
-  let test = function
-    | NumType t ->
+    | LitResult {it = Values.Ref _; _} ->
+      assert false
+    | NanResult nanop ->
+      let nan =
+        match nanop.it with
+        | Values.I32 _ | Values.I64 _ -> assert false
+        | Values.F32 n | Values.F64 n -> n
+      in
+      let nan_bitmask_of =
+        match nan with
+        | CanonicalNan -> abs_mask_of (* must only differ from the canonical NaN in its sign bit *)
+        | ArithmeticNan -> canonical_nan_of (* can be any NaN that's one everywhere the canonical NaN is one *)
+      in
+      let t = Values.type_of_num nanop.it in
       let t', reinterpret = reinterpret_of t in
       [ reinterpret @@ at;
         Const (nan_bitmask_of t' @@ at) @@ at;
@@ -301,33 +302,18 @@ let assert_return_nan_bitpattern nan_bitmask_of ts at =
         Compare (eq_of t') @@ at;
         Test (Values.I32 I32Op.Eqz) @@ at;
         BrIf (0l @@ at) @@ at ]
-    | RefType _ -> [Br (0l @@ at) @@ at]
-  in [], List.flatten (List.rev_map test ts)
-
-let assert_return_canonical_nan = assert_return_nan_bitpattern abs_mask_of
-let assert_return_arithmetic_nan = assert_return_nan_bitpattern canonical_nan_of
-
-let assert_return_ref ts at =
-  let test = function
-    | NumType _ -> [Br (0l @@ at) @@ at]
-    | RefType _ ->
+    | RefResult ->
       [ RefIsNull @@ at;
         BrIf (0l @@ at) @@ at ]
-  in [], List.flatten (List.rev_map test ts)
-
-let assert_return_func ts at =
-  let test = function
-    | NumType _ -> [Br (0l @@ at) @@ at]
-    | RefType _ ->
+    | FuncResult ->
       [ Call (is_funcref_idx @@ at) @@ at;
         Test (Values.I32 I32Op.Eqz) @@ at;
         BrIf (0l @@ at) @@ at ]
-  in [], List.flatten (List.rev_map test ts)
+  in [], List.flatten (List.rev_map test ress)
 
 let wrap item_name wrap_action wrap_assertion at =
   let itypes, idesc, action = wrap_action at in
   let locals, assertion = wrap_assertion at in
-  let item = Lib.List32.length itypes @@ at in
   let types =
     (FuncType ([], []) @@ at) ::
     (FuncType ([NumType I32Type], [RefType AnyRefType]) @@ at) ::
@@ -347,6 +333,12 @@ let wrap item_name wrap_action wrap_assertion at =
       {module_name = Utf8.decode "spectest"; item_name = Utf8.decode "eq_ref";
        idesc = FuncImport (4l @@ at) @@ at} @@ at ]
   in
+  let item =
+    List.fold_left
+      (fun i im ->
+        match im.it.idesc.it with FuncImport _ -> Int32.add i 1l | _ -> i
+      ) 0l imports @@ at
+  in
   let edesc = FuncExport item @@ at in
   let exports = [{name = Utf8.decode "run"; edesc} @@ at] in
   let body =
@@ -365,6 +357,7 @@ let is_js_num_type = function
 let is_js_value_type = function
   | NumType t -> is_js_num_type t
   | RefType t -> true
+  | BotType -> assert false
 
 let is_js_global_type = function
   | GlobalType (t, mut) -> is_js_value_type t && mut = Immutable
@@ -417,6 +410,21 @@ let of_value v =
   | Ref NullRef -> "null"
   | Ref (HostRef n) -> "hostref(" ^ Int32.to_string n ^ ")"
   | _ -> assert false
+
+let of_nan = function
+  | CanonicalNan -> "\"nan:canonical\""
+  | ArithmeticNan -> "\"nan:arithmetic\""
+
+let of_result res =
+  match res.it with
+  | LitResult value -> of_value value
+  | NanResult nanop ->
+    (match nanop.it with
+    | Values.I32 _ | Values.I64 _ -> assert false
+    | Values.F32 n | Values.F64 n -> of_nan n
+    )
+  | RefResult -> "\"ref.any\""
+  | FuncResult -> "\"ref.func\""
 
 let rec of_definition def =
   match def.it with
@@ -474,19 +482,9 @@ let of_assertion mods ass =
     "assert_unlinkable(" ^ of_definition def ^ ");"
   | AssertUninstantiable (def, _) ->
     "assert_uninstantiable(" ^ of_definition def ^ ");"
-  | AssertReturn (act, vs) ->
-    of_assertion' mods act "assert_return" (List.map of_value vs)
-      (Some (assert_return vs))
-  | AssertReturnCanonicalNaN act ->
-    of_assertion' mods act "assert_return_canonical_nan" []
-      (Some assert_return_canonical_nan)
-  | AssertReturnArithmeticNaN act ->
-    of_assertion' mods act "assert_return_arithmetic_nan" []
-      (Some assert_return_arithmetic_nan)
-  | AssertReturnRef act ->
-    of_assertion' mods act "assert_return_ref" [] (Some assert_return_ref)
-  | AssertReturnFunc act ->
-    of_assertion' mods act "assert_return_func" [] (Some assert_return_func)
+  | AssertReturn (act, ress) ->
+    of_assertion' mods act "assert_return" (List.map of_result ress)
+      (Some (assert_return ress))
   | AssertTrap (act, _) ->
     of_assertion' mods act "assert_trap" [] None
   | AssertExhaustion (act, _) ->

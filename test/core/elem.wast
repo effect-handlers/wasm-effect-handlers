@@ -4,19 +4,85 @@
 (module
   (table $t 10 funcref)
   (func $f)
-  (elem (i32.const 0))
-  (elem (i32.const 0) $f $f)
+  (func $g)
+
+  ;; Passive
+  (elem funcref)
+  (elem funcref (ref.func $f) (item ref.func $f) (item (ref.null)) (ref.func $g))
+  (elem func)
+  (elem func $f $f $g $g)
+
+  (elem $p1 funcref)
+  (elem $p2 funcref (ref.func $f) (ref.func $f) (ref.null) (ref.func $g))
+  (elem $p3 func)
+  (elem $p4 func $f $f $g $g)
+
+  ;; Active
+  (elem (table $t) (i32.const 0) funcref)
+  (elem (table $t) (i32.const 0) funcref (ref.func $f) (ref.null))
+  (elem (table $t) (i32.const 0) func)
+  (elem (table $t) (i32.const 0) func $f $g)
+  (elem (table $t) (offset (i32.const 0)) funcref)
+  (elem (table $t) (offset (i32.const 0)) func $f $g)
+  (elem (table 0) (i32.const 0) func)
+  (elem (table 0x0) (i32.const 0) func $f $f)
+  (elem (table 0x000) (offset (i32.const 0)) func)
+  (elem (table 0) (offset (i32.const 0)) func $f $f)
+  (elem (table $t) (i32.const 0) func)
+  (elem (table $t) (i32.const 0) func $f $f)
+  (elem (table $t) (offset (i32.const 0)) func)
+  (elem (table $t) (offset (i32.const 0)) func $f $f)
   (elem (offset (i32.const 0)))
+  (elem (offset (i32.const 0)) funcref (ref.func $f) (ref.null))
+  (elem (offset (i32.const 0)) func $f $f)
   (elem (offset (i32.const 0)) $f $f)
-  (elem 0 (i32.const 0))
-  (elem 0x0 (i32.const 0) $f $f)
-  (elem 0x000 (offset (i32.const 0)))
-  (elem 0 (offset (i32.const 0)) $f $f)
-  (elem $t (i32.const 0))
-  (elem $t (i32.const 0) $f $f)
-  (elem $t (offset (i32.const 0)))
-  (elem $t (offset (i32.const 0)) $f $f)
+  (elem (i32.const 0))
+  (elem (i32.const 0) funcref (ref.func $f) (ref.null))
+  (elem (i32.const 0) func $f $f)
+  (elem (i32.const 0) $f $f)
+
+  (elem $a1 (table $t) (i32.const 0) funcref)
+  (elem $a2 (table $t) (i32.const 0) funcref (ref.func $f) (ref.null))
+  (elem $a3 (table $t) (i32.const 0) func)
+  (elem $a4 (table $t) (i32.const 0) func $f $g)
+  (elem $a9 (table $t) (offset (i32.const 0)) funcref)
+  (elem $a10 (table $t) (offset (i32.const 0)) func $f $g)
+  (elem $a11 (table 0) (i32.const 0) func)
+  (elem $a12 (table 0x0) (i32.const 0) func $f $f)
+  (elem $a13 (table 0x000) (offset (i32.const 0)) func)
+  (elem $a14 (table 0) (offset (i32.const 0)) func $f $f)
+  (elem $a15 (table $t) (i32.const 0) func)
+  (elem $a16 (table $t) (i32.const 0) func $f $f)
+  (elem $a17 (table $t) (offset (i32.const 0)) func)
+  (elem $a18 (table $t) (offset (i32.const 0)) func $f $f)
+  (elem $a19 (offset (i32.const 0)))
+  (elem $a20 (offset (i32.const 0)) funcref (ref.func $f) (ref.null))
+  (elem $a21 (offset (i32.const 0)) func $f $f)
+  (elem $a22 (offset (i32.const 0)) $f $f)
+  (elem $a23 (i32.const 0))
+  (elem $a24 (i32.const 0) funcref (ref.func $f) (ref.null))
+  (elem $a25 (i32.const 0) func $f $f)
+  (elem $a26 (i32.const 0) $f $f)
+
+  ;; Declarative
+  (elem declare funcref)
+  (elem declare funcref (ref.func $f) (ref.func $f) (ref.null) (ref.func $g))
+  (elem declare func)
+  (elem declare func $f $f $g $g)
+
+  (elem $d1 declare funcref)
+  (elem $d2 declare funcref (ref.func $f) (ref.func $f) (ref.null) (ref.func $g))
+  (elem $d3 declare func)
+  (elem $d4 declare func $f $f $g $g)
 )
+
+(module
+  (func $f)
+  (func $g)
+
+  (table $t funcref (elem (ref.func $f) (ref.null) (ref.func $g)))
+)
+
 
 ;; Basic use
 
@@ -139,108 +205,129 @@
 
 ;; Invalid bounds for elements
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 0 funcref)
     (func $f)
     (elem (i32.const 0) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 0 0 funcref)
     (func $f)
     (elem (i32.const 0) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 0 1 funcref)
     (func $f)
     (elem (i32.const 0) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 0 funcref)
     (elem (i32.const 1))
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
-
-(assert_unlinkable
+(assert_trap
   (module
     (table 10 funcref)
     (func $f)
     (elem (i32.const 10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
-(assert_unlinkable
+(assert_trap
   (module
     (import "spectest" "table" (table 10 funcref))
     (func $f)
     (elem (i32.const 10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 10 20 funcref)
     (func $f)
     (elem (i32.const 10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
-(assert_unlinkable
+(assert_trap
   (module
     (import "spectest" "table" (table 10 funcref))
     (func $f)
     (elem (i32.const 10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 10 funcref)
     (func $f)
     (elem (i32.const -1) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
-(assert_unlinkable
+(assert_trap
   (module
     (import "spectest" "table" (table 10 funcref))
     (func $f)
     (elem (i32.const -1) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
 
-(assert_unlinkable
+(assert_trap
   (module
     (table 10 funcref)
     (func $f)
     (elem (i32.const -10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
-(assert_unlinkable
+(assert_trap
   (module
     (import "spectest" "table" (table 10 funcref))
     (func $f)
     (elem (i32.const -10) $f)
   )
-  "elements segment does not fit"
+  "out of bounds"
 )
+
+;; Implicitly dropped elements
+
+(module
+  (table 10 funcref)
+  (elem $e (i32.const 0) func $f)
+  (func $f)
+  (func (export "init")
+    (table.init $e (i32.const 0) (i32.const 0) (i32.const 1))
+  )
+)
+(assert_trap (invoke "init") "out of bounds")
+
+(module
+  (table 10 funcref)
+  (elem $e declare func $f)
+  (func $f)
+  (func (export "init")
+    (table.init $e (i32.const 0) (i32.const 0) (i32.const 1))
+  )
+)
+(assert_trap (invoke "init") "out of bounds")
 
 ;; Element without table
 
@@ -249,7 +336,7 @@
     (func $f)
     (elem (i32.const 0) $f)
   )
-  "unknown table 0"
+  "unknown table"
 )
 
 ;; Invalid offsets
@@ -350,7 +437,7 @@
 
 (register "module1" $module1)
 
-(assert_trap (invoke $module1 "call-7") "uninitialized element 7")
+(assert_trap (invoke $module1 "call-7") "uninitialized element")
 (assert_return (invoke $module1 "call-8") (i32.const 65))
 (assert_return (invoke $module1 "call-9") (i32.const 66))
 

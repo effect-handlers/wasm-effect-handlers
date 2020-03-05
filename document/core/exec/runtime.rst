@@ -93,7 +93,9 @@ Store
 ~~~~~
 
 The *store* represents all global state that can be manipulated by WebAssembly programs.
-It consists of the runtime representation of all *instances* of :ref:`functions <syntax-funcinst>`, :ref:`tables <syntax-tableinst>`, :ref:`memories <syntax-meminst>`, and :ref:`globals <syntax-globalinst>` that have been :ref:`allocated <alloc>` during the life time of the abstract machine. [#gc]_
+It consists of the runtime representation of all *instances* of :ref:`functions <syntax-funcinst>`, :ref:`tables <syntax-tableinst>`, :ref:`memories <syntax-meminst>`, and :ref:`globals <syntax-globalinst>`, :ref:`element segments <syntax-eleminst>`, and :ref:`data segments <syntax-datainst>` that have been :ref:`allocated <alloc>` during the life time of the abstract machine. [#gc]_
+
+It is an invariant of the semantics that no element or data instance is :ref:`addressed <syntax-addr>` from anywhere else but the owning module instances.
 
 Syntactically, the store is defined as a :ref:`record <notation-record>` listing the existing instances of each category:
 
@@ -104,7 +106,9 @@ Syntactically, the store is defined as a :ref:`record <notation-record>` listing
      \SFUNCS & \funcinst^\ast, \\
      \STABLES & \tableinst^\ast, \\
      \SMEMS & \meminst^\ast, \\
-     \SGLOBALS & \globalinst^\ast ~\} \\
+     \SGLOBALS & \globalinst^\ast, \\
+     \SELEMS & \eleminst^\ast, \\
+     \SDATAS & \datainst^\ast ~\} \\
      \end{array}
    \end{array}
 
@@ -120,28 +124,34 @@ Convention
 * The meta variable :math:`S` ranges over stores where clear from context.
 
 
-.. index:: ! address, store, function instance, table instance, memory instance, global instance, embedder
+.. index:: ! address, store, function instance, table instance, memory instance, global instance, element instance, data instance, embedder
    pair: abstract syntax; function address
    pair: abstract syntax; table address
    pair: abstract syntax; memory address
    pair: abstract syntax; global address
+   pair: abstract syntax; element address
+   pair: abstract syntax; data address
    pair: abstract syntax; host address
    pair: function; address
    pair: table; address
    pair: memory; address
    pair: global; address
+   pair: element; address
+   pair: data; address
    pair: host; address
 .. _syntax-funcaddr:
 .. _syntax-tableaddr:
 .. _syntax-memaddr:
 .. _syntax-globaladdr:
+.. _syntax-elemaddr:
+.. _syntax-dataaddr:
 .. _syntax-hostaddr:
 .. _syntax-addr:
 
 Addresses
 ~~~~~~~~~
 
-:ref:`Function instances <syntax-funcinst>`, :ref:`table instances <syntax-tableinst>`, :ref:`memory instances <syntax-meminst>`, and :ref:`global instances <syntax-globalinst>` in the :ref:`store <syntax-store>` are referenced with abstract *addresses*.
+:ref:`Function instances <syntax-funcinst>`, :ref:`table instances <syntax-tableinst>`, :ref:`memory instances <syntax-meminst>`, and :ref:`global instances <syntax-globalinst>`, :ref:`element instances <syntax-eleminst>`, and :ref:`data instances <syntax-datainst>` in the :ref:`store <syntax-store>` are referenced with abstract *addresses*.
 These are simply indices into the respective store component.
 In addition, an :ref:`embedder <embedder>` may supply an uninterpreted set of *host addresses*.
 
@@ -156,6 +166,10 @@ In addition, an :ref:`embedder <embedder>` may supply an uninterpreted set of *h
    \production{(memory address)} & \memaddr &::=&
      \addr \\
    \production{(global address)} & \globaladdr &::=&
+     \addr \\
+   \production{(element address)} & \elemaddr &::=&
+     \addr \\
+   \production{(data address)} & \dataaddr &::=&
      \addr \\
    \production{(host address)} & \hostaddr &::=&
      \addr \\
@@ -176,7 +190,7 @@ even where this identity is not observable from within WebAssembly code itself
    hence logical addresses can be arbitrarily large natural numbers.
 
 
-.. index:: ! instance, function type, function instance, table instance, memory instance, global instance, export instance, table address, memory address, global address, index, name
+.. index:: ! instance, function type, function instance, table instance, memory instance, global instance, element instance, data instance, export instance, table address, memory address, global address, element address, data address, index, name
    pair: abstract syntax; module instance
    pair: module; instance
 .. _syntax-moduleinst:
@@ -197,6 +211,8 @@ and collects runtime representations of all entities that are imported, defined,
      \MITABLES & \tableaddr^\ast, \\
      \MIMEMS & \memaddr^\ast, \\
      \MIGLOBALS & \globaladdr^\ast, \\
+     \MIELEMS & \elemaddr^\ast, \\
+     \MIDATAS & \dataaddr^\ast, \\
      \MIEXPORTS & \exportinst^\ast ~\} \\
      \end{array}
    \end{array}
@@ -242,25 +258,24 @@ but within certain :ref:`constraints <exec-invoke-host>` that ensure the integri
 .. index:: ! table instance, table, function address, table type, embedder, element segment
    pair: abstract syntax; table instance
    pair: table; instance
-.. _syntax-funcelem:
 .. _syntax-tableinst:
 
 Table Instances
 ~~~~~~~~~~~~~~~
 
 A *table instance* is the runtime representation of a :ref:`table <syntax-table>`.
-It holds a vector of *function elements* and an optional maximum size, if one was specified in the :ref:`table type <syntax-tabletype>` at the table's definition site.
-
-Each table element is a :ref:`reference value <syntax-ref>`.
-Table elements can be mutated through :ref:`table instructions <syntax-instr-table>`, the execution of an :ref:`element segment <syntax-elem>`, or by external means provided by the :ref:`embedder <embedder>`.
+It records its :ref:`type <syntax-tabletype>` and holds a vector of :ref:`reference values <syntax-ref>`.
 
 .. math::
    \begin{array}{llll}
    \production{(table instance)} & \tableinst &::=&
-     \{ \TIELEM~\vec(\reff), \TIMAX~\u32^? \} \\
+     \{ \TITYPE~\tabletype, \TIELEM~\vec(\reff) \} \\
    \end{array}
 
-It is an invariant of the semantics that the length of the element vector never exceeds the maximum size, if present.
+Table elements can be mutated through :ref:`table instructions <syntax-instr-table>`, the execution of an active :ref:`element segment <syntax-elem>`, or by external means provided by the :ref:`embedder <embedder>`.
+
+It is an invariant of the semantics that all table elements have a type :ref:`matching <match-reftype>` the element type of :math:`\tabletype`.
+It also is an invariant that the length of the element vector never exceeds the maximum size of :math:`\tabletype`, if present.
 
 
 .. index:: ! memory instance, memory, byte, ! page size, memory type, embedder, data segment, instruction
@@ -273,20 +288,19 @@ Memory Instances
 ~~~~~~~~~~~~~~~~
 
 A *memory instance* is the runtime representation of a linear :ref:`memory <syntax-mem>`.
-It holds a vector of :ref:`bytes <syntax-byte>` and an optional maximum size, if one was specified at the definition site of the memory.
+It records its :ref:`type <syntax-memtype>` and holds a vector of :ref:`bytes <syntax-byte>`.
 
 .. math::
    \begin{array}{llll}
    \production{(memory instance)} & \meminst &::=&
-     \{ \MIDATA~\vec(\byte), \MIMAX~\u32^? \} \\
+     \{ \MITYPE~\memtype, \MIDATA~\vec(\byte) \} \\
    \end{array}
 
 The length of the vector always is a multiple of the WebAssembly *page size*, which is defined to be the constant :math:`65536` -- abbreviated :math:`64\,\F{Ki}`.
-Like in a :ref:`memory type <syntax-memtype>`, the maximum size in a memory instance is given in units of this page size.
 
-The bytes can be mutated through :ref:`memory instructions <syntax-instr-memory>`, the execution of a :ref:`data segment <syntax-data>`, or by external means provided by the :ref:`embedder <embedder>`.
+The bytes can be mutated through :ref:`memory instructions <syntax-instr-memory>`, the execution of an active :ref:`data segment <syntax-data>`, or by external means provided by the :ref:`embedder <embedder>`.
 
-It is an invariant of the semantics that the length of the byte vector, divided by page size, never exceeds the maximum size, if present.
+It is an invariant of the semantics that the length of the byte vector, divided by page size, never exceeds the maximum size of :math:`\memtype`, if present.
 
 
 .. index:: ! global instance, global, value, mutability, instruction, embedder
@@ -298,15 +312,53 @@ Global Instances
 ~~~~~~~~~~~~~~~~
 
 A *global instance* is the runtime representation of a :ref:`global <syntax-global>` variable.
-It holds an individual :ref:`value <syntax-val>` and a flag indicating whether it is mutable.
+It records its :ref:`type <syntax-globaltype>` and holds an individual :ref:`value <syntax-val>`.
 
 .. math::
    \begin{array}{llll}
    \production{(global instance)} & \globalinst &::=&
-     \{ \GIVALUE~\val, \GIMUT~\mut \} \\
+     \{ \GITYPE~\valtype, \GIVALUE~\val \} \\
    \end{array}
 
 The value of mutable globals can be mutated through :ref:`variable instructions <syntax-instr-variable>` or by external means provided by the :ref:`embedder <embedder>`.
+
+It is an invariant of the semantics that the value has a type :ref:`matching <match-valtype>` the :ref:`value type <syntax-valtype>` of :math:`\globaltype`.
+
+
+.. index:: ! element instance, element segment, embedder, element expression
+   pair: abstract syntax; element instance
+   pair: element; instance
+.. _syntax-eleminst:
+
+Element Instances
+~~~~~~~~~~~~~~~~~
+
+An *element instance* is the runtime representation of an :ref:`element segment <syntax-elem>`.
+It holds a vector of references and their common :ref:`type <syntax-reftype>`.
+
+.. math::
+  \begin{array}{llll}
+  \production{(element instance)} & \eleminst &::=&
+    \{ \EITYPE~\reftype, \EIELEM~\vec(\reff) \} \\
+  \end{array}
+
+
+.. index:: ! data instance, data segment, embedder, byte
+  pair: abstract syntax; data instance
+  pair: data; instance
+.. _syntax-datainst:
+
+Data Instances
+~~~~~~~~~~~~~~
+
+An *data instance* is the runtime representation of a :ref:`data segment <syntax-data>`.
+It holds a vector of :ref:`bytes <syntax-byte>`.
+
+.. math::
+  \begin{array}{llll}
+  \production{(data instance)} & \datainst &::=&
+    \{ \DIDATA~\vec(\byte) \} \\
+  \end{array}
 
 
 .. index:: ! export instance, export, name, external value
@@ -362,7 +414,10 @@ It filters out entries of a specific kind in an order-preserving fashion:
 
 * :math:`\evglobals(\externval^\ast) = [\globaladdr ~|~ (\EVGLOBAL~\globaladdr) \in \externval^\ast]`
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 7cfa19962056c87c8747c2c1edf8679cf055cd3f
 .. index:: ! stack, ! frame, ! label, instruction, store, activation, function, call, local, module instance
    pair: abstract syntax; frame
    pair: abstract syntax; label
@@ -424,10 +479,10 @@ Intuitively, :math:`\instr^\ast` is the *continuation* to execute when the branc
 
    When branching, the empty continuation ends the targeted block, such that execution can proceed with consecutive instructions.
 
-Frames
-......
+Activations and Frames
+......................
 
-Activation frames carry the return arity of the respective function,
+Activation frames carry the return arity :math:`n` of the respective function,
 hold the values of its :ref:`locals <syntax-local>` (including arguments) in the order corresponding to their static :ref:`local indices <syntax-localidx>`,
 and a reference to the function's own :ref:`module instance <syntax-moduleinst>`:
 
@@ -463,8 +518,6 @@ Conventions
 .. _syntax-trap:
 .. _syntax-reffuncaddr:
 .. _syntax-invoke:
-.. _syntax-init_elem:
-.. _syntax-init_data:
 .. _syntax-instr-admin:
 
 Administrative Instructions
@@ -483,8 +536,6 @@ In order to express the reduction of :ref:`traps <trap>`, :ref:`calls <syntax-ca
      \REFFUNCADDR~\funcaddr \\ &&|&
      \REFHOST~\hostaddr \\ &&|&
      \INVOKE~\funcaddr \\ &&|&
-     \INITELEM~\tableaddr~\u32~\funcidx^\ast \\ &&|&
-     \INITDATA~\memaddr~\u32~\byte^\ast \\ &&|&
      \LABEL_n\{\instr^\ast\}~\instr^\ast~\END \\ &&|&
      \FRAME_n\{\frame\}~\instr^\ast~\END \\
    \end{array}
@@ -496,11 +547,6 @@ The |REFFUNCADDR| instruction represents :ref:`function reference values <syntax
 
 The |INVOKE| instruction represents the imminent invocation of a :ref:`function instance <syntax-funcinst>`, identified by its :ref:`address <syntax-funcaddr>`.
 It unifies the handling of different forms of calls.
-
-The |INITELEM| and |INITDATA| instructions perform initialization of :ref:`element <syntax-elem>` and :ref:`data <syntax-data>` segments during module :ref:`instantiation <exec-instantiation>`.
-
-.. note::
-   The reason for splitting instantiation into individual reduction steps is to provide a semantics that is compatible with future extensions like threads.
 
 The |LABEL| and |FRAME| instructions model :ref:`labels <syntax-label>` and :ref:`frames <syntax-frame>` :ref:`"on the stack" <exec-notation>`.
 Moreover, the administrative syntax maintains the nesting structure of the original :ref:`structured control instruction <syntax-instr-control>` or :ref:`function body <syntax-func>` and their :ref:`instruction sequences <syntax-instr-seq>` with an |END| marker.
@@ -541,7 +587,7 @@ That way, the end of the inner instruction sequence is known when part of an out
 Block Contexts
 ..............
 
-In order to specify the reduction of :ref:`branches <syntax-instr-control>`, the following syntax of *block contexts* is defined, indexed by the count :math:`k` of labels surrounding the hole:
+In order to specify the reduction of :ref:`branches <syntax-instr-control>`, the following syntax of *block contexts* is defined, indexed by the count :math:`k` of labels surrounding a *hole* :math:`[\_]` that marks the place where the next step of computation is taking place:
 
 .. math::
    \begin{array}{llll}
@@ -575,7 +621,7 @@ Configurations
 A *configuration* consists of the current :ref:`store <syntax-store>` and an executing *thread*.
 
 A thread is a computation over :ref:`instructions <syntax-instr>`
-that operates relative to a current :ref:`frame <syntax-frame>` referring to the home :ref:`module instance <syntax-moduleinst>` that the computation runs in.
+that operates relative to a current :ref:`frame <syntax-frame>` referring to the :ref:`module instance <syntax-moduleinst>` in which the computation runs, i.e., where the current function originates from.
 
 .. math::
    \begin{array}{llcl}

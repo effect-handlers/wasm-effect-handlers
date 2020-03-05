@@ -57,6 +57,7 @@ type code = value stack * admin_instr list
 and admin_instr = admin_instr' phrase
 and admin_instr' =
   | Plain of instr'
+  | Refer of ref_
   | Invoke of func_inst
   | Trapping of string
   | Returning of value stack
@@ -85,6 +86,8 @@ let func (inst : module_inst) x = lookup "function" inst.funcs x
 let table (inst : module_inst) x = lookup "table" inst.tables x
 let memory (inst : module_inst) x = lookup "memory" inst.memories x
 let global (inst : module_inst) x = lookup "global" inst.globals x
+let elem (inst : module_inst) x = lookup "element segment" inst.elems x
+let data (inst : module_inst) x = lookup "data segment" inst.datas x
 let local (frame : frame) x = lookup "local" frame.locals x
 
 let any_ref inst x i at =
@@ -125,6 +128,22 @@ let drop n (vs : 'a stack) at =
  *   c : config
  *)
 
+let mem_oob frame x i n =
+  I64.gt_u (I64.add (I64_convert.extend_i32_u i) (I64_convert.extend_i32_u n))
+    (Memory.bound (memory frame.inst x))
+
+let data_oob frame x i n =
+  I64.gt_u (I64.add (I64_convert.extend_i32_u i) (I64_convert.extend_i32_u n))
+    (I64.of_int_u (String.length !(data frame.inst x)))
+
+let table_oob frame x i n =
+  I64.gt_u (I64.add (I64_convert.extend_i32_u i) (I64_convert.extend_i32_u n))
+    (I64_convert.extend_i32_u (Table.size (table frame.inst x)))
+
+let elem_oob frame x i n =
+  I64.gt_u (I64.add (I64_convert.extend_i32_u i) (I64_convert.extend_i32_u n))
+    (I64.of_int_u (List.length !(elem frame.inst x)))
+
 let rec step (c : config) : config =
   let {frame; code = vs, es; _} = c in
   let e = List.hd es in
@@ -151,36 +170,29 @@ let rec step (c : config) : config =
         let args, vs' = take n1 vs e.at, drop n1 vs e.at in
         vs', [Label (n1, [e' @@ e.at], (args, List.map plain es')) @@ e.at]
 
-      | If (ts, es1, es2), Num (I32 0l) :: vs' ->
-        vs', [Plain (Block (ts, es2)) @@ e.at]
-
       | If (ts, es1, es2), Num (I32 i) :: vs' ->
-         vs', [Plain (Block (ts, es1)) @@ e.at]
-
-      (* | If (bt, es1, es2), I32 0l :: vs' ->
-       *   vs', [Plain (Block (bt, es2)) @@ e.at]
-       * 
-       * | If (bt, es1, es2), I32 i :: vs' ->
-       *   vs', [Plain (Block (bt, es1)) @@ e.at] *)
+        if i = 0l then
+          vs', [Plain (Block (ts, es2)) @@ e.at]
+        else
+          vs', [Plain (Block (ts, es1)) @@ e.at]
 
       | Br x, vs ->
         [], [Breaking (x.it, vs) @@ e.at]
 
-      | BrIf x, Num (I32 0l) :: vs' ->
-        vs', []
-
       | BrIf x, Num (I32 i) :: vs' ->
-        vs', [Plain (Br x) @@ e.at]
-
-      | BrTable (xs, x), Num (I32 i) :: vs'
-        when I32.ge_u i (Lib.List32.length xs) ->
-        vs', [Plain (Br x) @@ e.at]
+        if i = 0l then
+          vs', []
+        else
+          vs', [Plain (Br x) @@ e.at]
 
       | BrTable (xs, x), Num (I32 i) :: vs' ->
-        vs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
+        if I32.ge_u i (Lib.List32.length xs) then
+          vs', [Plain (Br x) @@ e.at]
+        else
+          vs', [Plain (Br (Lib.List32.nth xs i)) @@ e.at]
 
       | Return, vs ->
-        vs, [Returning vs @@ e.at]
+        [], [Returning vs @@ e.at]
 
       | Call x, vs ->
         vs, [Invoke (func frame.inst x) @@ e.at]
@@ -195,11 +207,11 @@ let rec step (c : config) : config =
       | Drop, v :: vs' ->
         vs', []
 
-      | Select, Num (I32 0l) :: v2 :: v1 :: vs' ->
-        v2 :: vs', []
-
-      | Select, Num (I32 i) :: v2 :: v1 :: vs' ->
-        v1 :: vs', []
+      | Select _, Num (I32 i) :: v2 :: v1 :: vs' ->
+        if i = 0l then
+          v2 :: vs', []
+        else
+          v1 :: vs', []
 
       | LocalGet x, vs ->
         !(local frame x) :: vs, []
@@ -228,28 +240,105 @@ let rec step (c : config) : config =
         (try Table.store (table frame.inst x) i r; vs', []
         with exn -> vs', [Trapping (table_error e.at exn) @@ e.at])
 
+      | TableSize x, vs ->
+        Num (I32 (Table.size (table frame.inst x))) :: vs, []
+
+      | TableGrow x, Num (I32 delta) :: Ref r :: vs' ->
+        let tab = table frame.inst x in
+        let old_size = Table.size tab in
+        let result =
+          try Table.grow tab delta r; old_size
+          with Table.SizeOverflow | Table.SizeLimit | Table.OutOfMemory -> -1l
+        in Num (I32 result) :: vs', []
+
+      | TableFill x, Num (I32 n) :: Ref r :: Num (I32 i) :: vs' ->
+        if table_oob frame x i n then
+          vs', [Trapping (table_error e.at Table.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else
+          let _ = assert (I32.lt_u i 0xffff_ffffl) in
+          vs', List.map (at e.at) [
+            Plain (Const (I32 i @@ e.at));
+            Refer r;
+            Plain (TableSet x);
+            Plain (Const (I32 (I32.add i 1l) @@ e.at));
+            Refer r;
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (TableFill x);
+          ]
+
+      | TableCopy (x, y), Num (I32 n) :: Num (I32 s) :: Num (I32 d) :: vs' ->
+        if table_oob frame x d n || table_oob frame y s n then
+          vs', [Trapping (table_error e.at Table.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else if d <= s then
+          vs', List.map (at e.at) [
+            Plain (Const (I32 d @@ e.at));
+            Plain (Const (I32 s @@ e.at));
+            Plain (TableGet y);
+            Plain (TableSet x);
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (TableCopy (x, y));
+          ]
+        else (* d > s *)
+          vs', List.map (at e.at) [
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (TableCopy (x, y));
+            Plain (Const (I32 d @@ e.at));
+            Plain (Const (I32 s @@ e.at));
+            Plain (TableGet y);
+            Plain (TableSet x);
+          ]
+
+      | TableInit (x, y), Num (I32 n) :: Num (I32 s) :: Num (I32 d) :: vs' ->
+        if table_oob frame x d n || elem_oob frame y s n then
+          vs', [Trapping (table_error e.at Table.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else
+          let seg = !(elem frame.inst y) in
+          vs', List.map (at e.at) [
+            Plain (Const (I32 d @@ e.at));
+            Refer (List.nth seg (Int32.to_int s));
+            Plain (TableSet x);
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (TableInit (x, y));
+          ]
+
+      | ElemDrop x, vs ->
+        let seg = elem frame.inst x in
+        seg := [];
+        vs, []
+
       | Load {offset; ty; sz; _}, Num (I32 i) :: vs' ->
         let mem = memory frame.inst (0l @@ e.at) in
-        let addr = I64_convert.extend_i32_u i in
+        let a = I64_convert.extend_i32_u i in
         (try
           let n =
             match sz with
-            | None -> Memory.load_num mem addr offset ty
-            | Some (sz, ext) -> Memory.load_packed sz ext mem addr offset ty
+            | None -> Memory.load_num mem a offset ty
+            | Some (sz, ext) -> Memory.load_packed sz ext mem a offset ty
           in Num n :: vs', []
         with exn -> vs', [Trapping (memory_error e.at exn) @@ e.at])
 
       | Store {offset; sz; _}, Num n :: Num (I32 i) :: vs' ->
         let mem = memory frame.inst (0l @@ e.at) in
-        let addr = I64_convert.extend_i32_u i in
+        let a = I64_convert.extend_i32_u i in
         (try
           (match sz with
-          | None -> Memory.store_num mem addr offset n
-          | Some sz -> Memory.store_packed sz mem addr offset n
+          | None -> Memory.store_num mem a offset n
+          | Some sz -> Memory.store_packed sz mem a offset n
           );
           vs', []
         with exn -> vs', [Trapping (memory_error e.at exn) @@ e.at]);
-
       | MemorySize, vs ->
         let mem = memory frame.inst (0l @@ e.at) in
         Num (I32 (Memory.size mem)) :: vs, []
@@ -262,14 +351,87 @@ let rec step (c : config) : config =
           with Memory.SizeOverflow | Memory.SizeLimit | Memory.OutOfMemory -> -1l
         in Num (I32 result) :: vs', []
 
+      | MemoryFill, Num (I32 n) :: Num k :: Num (I32 i) :: vs' ->
+        if mem_oob frame (0l @@ e.at) i n then
+          vs', [Trapping (memory_error e.at Memory.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else
+          vs', List.map (at e.at) [
+            Plain (Const (I32 i @@ e.at));
+            Plain (Const (k @@ e.at));
+            Plain (Store
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.Pack8});
+            Plain (Const (I32 (I32.add i 1l) @@ e.at));
+            Plain (Const (k @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (MemoryFill);
+          ]
+
+      | MemoryCopy, Num (I32 n) :: Num (I32 s) :: Num (I32 d) :: vs' ->
+        if mem_oob frame (0l @@ e.at) s n || mem_oob frame (0l @@ e.at) d n then
+          vs', [Trapping (memory_error e.at Memory.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else if d <= s then
+          vs', List.map (at e.at) [
+            Plain (Const (I32 d @@ e.at));
+            Plain (Const (I32 s @@ e.at));
+            Plain (Load
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.(Pack8, ZX)});
+            Plain (Store
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.Pack8});
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (MemoryCopy);
+          ]
+        else (* d > s *)
+          vs', List.map (at e.at) [
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (MemoryCopy);
+            Plain (Const (I32 d @@ e.at));
+            Plain (Const (I32 s @@ e.at));
+            Plain (Load
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.(Pack8, ZX)});
+            Plain (Store
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.Pack8});
+          ]
+
+      | MemoryInit x, Num (I32 n) :: Num (I32 s) :: Num (I32 d) :: vs' ->
+        if mem_oob frame (0l @@ e.at) d n || data_oob frame x s n then
+          vs', [Trapping (memory_error e.at Memory.Bounds) @@ e.at]
+        else if n = 0l then
+          vs', []
+        else
+          let seg = !(data frame.inst x) in
+          let b = Int32.of_int (Char.code seg.[Int32.to_int s]) in
+          vs', List.map (at e.at) [
+            Plain (Const (I32 d @@ e.at));
+            Plain (Const (I32 b @@ e.at));
+            Plain (Store
+              {ty = I32Type; align = 0; offset = 0l; sz = Some Memory.Pack8});
+            Plain (Const (I32 (I32.add d 1l) @@ e.at));
+            Plain (Const (I32 (I32.add s 1l) @@ e.at));
+            Plain (Const (I32 (I32.sub n 1l) @@ e.at));
+            Plain (MemoryInit x);
+          ]
+
+      | DataDrop x, vs ->
+        let seg = data frame.inst x in
+        seg := "";
+        vs, []
+
       | RefNull, vs' ->
         Ref NullRef :: vs', []
 
-      | RefIsNull, Ref NullRef :: vs' ->
-        Num (I32 1l) :: vs', []
-
-      | RefIsNull, v :: vs' ->
-        Num (I32 0l) :: vs', []
+      | RefIsNull, Ref r :: vs' ->
+        if r = NullRef then
+          Num (I32 1l) :: vs', []
+        else
+          Num (I32 0l) :: vs', []
 
       | RefFunc x, vs' ->
         let f = func frame.inst x in
@@ -304,6 +466,9 @@ let rec step (c : config) : config =
         Crash.error e.at
           ("missing or ill-typed operand on stack (" ^ s1 ^ " : " ^ s2 ^ ")")
       )
+
+    | Refer r, vs ->
+      Ref r :: vs, []
 
     | Trapping msg, vs ->
       assert false
@@ -382,10 +547,12 @@ let rec eval (c : config) : value stack =
 (* Functions & Constants *)
 
 let invoke (func : func_inst) (vs : value list) : value list =
-  let at = match func with Func.AstFunc (_,_, f) -> f.at | _ -> no_region in
+  let at = match func with Func.AstFunc (_, _, f) -> f.at | _ -> no_region in
   let FuncType (ins, out) = Func.type_of func in
   if List.length vs <> List.length ins then
     Crash.error at "wrong number of arguments";
+  if not (List.for_all2 (fun v -> match_value_type (type_of_value v)) vs ins) then
+    Crash.error at "wrong types of arguments";
   let c = config empty_module_inst (List.rev vs) [Invoke func @@ at] in
   try List.rev (eval c) with Stack_overflow ->
     Exhaustion.error at "call stack exhausted"
@@ -396,11 +563,6 @@ let eval_const (inst : module_inst) (const : const) : value =
   | [v] -> v
   | vs -> Crash.error const.at "wrong number of results on stack"
 
-let i32 (v : value) at =
-  match v with
-  | Num (I32 i) -> i
-  | _ -> Crash.error at "type error: i32 value expected"
-
 
 (* Modules *)
 
@@ -409,15 +571,15 @@ let create_func (inst : module_inst) (f : func) : func_inst =
 
 let create_table (inst : module_inst) (tab : table) : table_inst =
   let {ttype} = tab.it in
-  Table.alloc ttype
+  Table.alloc ttype NullRef
 
 let create_memory (inst : module_inst) (mem : memory) : memory_inst =
   let {mtype} = mem.it in
   Memory.alloc mtype
 
 let create_global (inst : module_inst) (glob : global) : global_inst =
-  let {gtype; value} = glob.it in
-  let v = eval_const inst value in
+  let {gtype; ginit} = glob.it in
+  let v = eval_const inst ginit in
   Global.alloc gtype v
 
 let create_export (inst : module_inst) (ex : export) : export_inst =
@@ -428,35 +590,15 @@ let create_export (inst : module_inst) (ex : export) : export_inst =
     | TableExport x -> ExternTable (table inst x)
     | MemoryExport x -> ExternMemory (memory inst x)
     | GlobalExport x -> ExternGlobal (global inst x)
-  in name, ext
+  in (name, ext)
 
+let create_elem (inst : module_inst) (seg : elem_segment) : elem_inst =
+  let {etype; einit; _} = seg.it in
+  ref (List.map (fun c -> as_ref (eval_const inst c)) einit)
 
-let init_func (inst : module_inst) (func : func_inst) =
-  match func with
-  | Func.AstFunc (_, inst_ref, _) -> inst_ref := inst
-  | _ -> assert false
-
-let init_table (inst : module_inst) (seg : table_segment) =
-  let {index; offset = const; init} = seg.it in
-  let tab = table inst index in
-  let offset = i32 (eval_const inst const) const.at in
-  let end_ = Int32.(add offset (of_int (List.length init))) in
-  let bound = Table.size tab in
-  if I32.lt_u bound end_ || I32.lt_u end_ offset then
-    Link.error seg.at "elements segment does not fit table";
-  fun () ->
-    Table.blit tab offset (List.map (fun x -> FuncRef (func inst x)) init)
-
-let init_memory (inst : module_inst) (seg : memory_segment) =
-  let {index; offset = const; init} = seg.it in
-  let mem = memory inst index in
-  let offset' = i32 (eval_const inst const) const.at in
-  let offset = I64_convert.extend_i32_u offset' in
-  let end_ = Int64.(add offset (of_int (String.length init))) in
-  let bound = Memory.bound mem in
-  if I64.lt_u bound end_ || I64.lt_u end_ offset then
-    Link.error seg.at "data segment does not fit memory";
-  fun () -> Memory.store_bytes mem offset init
+let create_data (inst : module_inst) (seg : data_segment) : data_inst =
+  let {dinit; _} = seg.it in
+  ref dinit
 
 
 let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
@@ -469,10 +611,48 @@ let add_import (m : module_) (ext : extern) (im : import) (inst : module_inst)
   | ExternMemory mem -> {inst with memories = mem :: inst.memories}
   | ExternGlobal glob -> {inst with globals = glob :: inst.globals}
 
+let init_func (inst : module_inst) (func : func_inst) =
+  match func with
+  | Func.AstFunc (_, inst_ref, _) -> inst_ref := inst
+  | _ -> assert false
+
+let run_elem i elem =
+  let at = elem.it.emode.at in
+  let x = i @@ at in
+  match elem.it.emode.it with
+  | Passive -> []
+  | Active {index; offset} ->
+    offset.it @ [
+      Const (I32 0l @@ at) @@ at;
+      Const (I32 (Lib.List32.length elem.it.einit) @@ at) @@ at;
+      TableInit (index, x) @@ at;
+      ElemDrop x @@ at
+    ]
+  | Declarative ->
+    [ElemDrop x @@ at]
+
+let run_data i data =
+  let at = data.it.dmode.at in
+  let x = i @@ at in
+  match data.it.dmode.it with
+  | Passive -> []
+  | Active {index; offset} ->
+    assert (index.it = 0l);
+    offset.it @ [
+      Const (I32 0l @@ at) @@ at;
+      Const (I32 (Int32.of_int (String.length data.it.dinit)) @@ at) @@ at;
+      MemoryInit x @@ at;
+      DataDrop x @@ at
+    ]
+  | Declarative -> assert false
+
+let run_start start =
+  [Call start @@ start.at]
+
 let init (m : module_) (exts : extern list) : module_inst =
   let
     { imports; tables; memories; globals; funcs; types;
-      exports; elems; data; start
+      exports; elems; datas; start
     } = m.it
   in
   if List.length exts <> List.length imports then
@@ -490,11 +670,16 @@ let init (m : module_) (exts : extern list) : module_inst =
       globals = inst1.globals @ List.map (create_global inst1) globals;
     }
   in
-  let inst = {inst2 with exports = List.map (create_export inst2) exports} in
+  let inst =
+    { inst2 with
+      exports = List.map (create_export inst2) exports;
+      elems = List.map (create_elem inst2) elems;
+      datas = List.map (create_data inst2) datas;
+    }
+  in
   List.iter (init_func inst) fs;
-  let init_elems = List.map (init_table inst) elems in
-  let init_datas = List.map (init_memory inst) data in
-  List.iter (fun f -> f ()) init_elems;
-  List.iter (fun f -> f ()) init_datas;
-  Lib.Option.app (fun x -> ignore (invoke (func inst x) [])) start;
+  let es_elem = List.concat (Lib.List32.mapi run_elem elems) in
+  let es_data = List.concat (Lib.List32.mapi run_data datas) in
+  let es_start = Lib.Option.get (Lib.Option.map run_start start) [] in
+  ignore (eval (config inst [] (List.map plain (es_elem @ es_data @ es_start))));
   inst

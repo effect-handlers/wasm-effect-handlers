@@ -162,6 +162,7 @@ rule token = parse
 
   | "anyref" { ANYREF }
   | "funcref" { FUNCREF }
+  | "nullref" { NULLREF }
   | (nxx as t) { NUM_TYPE (num_type t) }
   | "mut" { MUT }
 
@@ -204,8 +205,22 @@ rule token = parse
   | "local.tee" { LOCAL_TEE }
   | "global.get" { GLOBAL_GET }
   | "global.set" { GLOBAL_SET }
+
   | "table.get" { TABLE_GET }
   | "table.set" { TABLE_SET }
+  | "table.size" { TABLE_SIZE }
+  | "table.grow" { TABLE_GROW }
+  | "table.fill" { TABLE_FILL }
+  | "table.copy" { TABLE_COPY }
+  | "table.init" { TABLE_INIT }
+  | "elem.drop" { ELEM_DROP }
+
+  | "memory.size" { MEMORY_SIZE }
+  | "memory.grow" { MEMORY_GROW }
+  | "memory.fill" { MEMORY_FILL }
+  | "memory.copy" { MEMORY_COPY }
+  | "memory.init" { MEMORY_INIT }
+  | "data.drop" { DATA_DROP }
 
   | (nxx as t)".load"
     { LOAD (fun a o ->
@@ -322,9 +337,6 @@ rule token = parse
   | "i32.reinterpret_f32" { CONVERT i32_reinterpret_f32 }
   | "i64.reinterpret_f64" { CONVERT i64_reinterpret_f64 }
 
-  | "memory.size" { MEMORY_SIZE }
-  | "memory.grow" { MEMORY_GROW }
-
   | "type" { TYPE }
   | "func" { FUNC }
   | "start" { START }
@@ -336,7 +348,9 @@ rule token = parse
   | "memory" { MEMORY }
   | "elem" { ELEM }
   | "data" { DATA }
+  | "declare" { DECLARE }
   | "offset" { OFFSET }
+  | "item" { ITEM }
   | "import" { IMPORT }
   | "export" { EXPORT }
 
@@ -352,12 +366,11 @@ rule token = parse
   | "assert_invalid" { ASSERT_INVALID }
   | "assert_unlinkable" { ASSERT_UNLINKABLE }
   | "assert_return" { ASSERT_RETURN }
-  | "assert_return_canonical_nan" { ASSERT_RETURN_CANONICAL_NAN }
-  | "assert_return_arithmetic_nan" { ASSERT_RETURN_ARITHMETIC_NAN }
-  | "assert_return_ref" { ASSERT_RETURN_REF }
-  | "assert_return_func" { ASSERT_RETURN_FUNC }
   | "assert_trap" { ASSERT_TRAP }
   | "assert_exhaustion" { ASSERT_EXHAUSTION }
+  | "nan:canonical" { NAN Script.CanonicalNan }
+  | "nan:arithmetic" { NAN Script.ArithmeticNan }
+  | "ref.any" { REF_ANY }
   | "input" { INPUT }
   | "output" { OUTPUT }
 

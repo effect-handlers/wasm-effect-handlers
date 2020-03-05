@@ -124,16 +124,16 @@ For each type, several subcategories can be distinguished:
 
 * *Constants*: return a static constant.
 
-* *Unary Operators*: consume one operand and produce one result of the respective type.
+* *Unary Operations*: consume one operand and produce one result of the respective type.
 
-* *Binary Operators*: consume two operands and produce one result of the respective type.
+* *Binary Operations*: consume two operands and produce one result of the respective type.
 
 * *Tests*: consume one operand of the respective type and produce a Boolean integer result.
 
 * *Comparisons*: consume two operands of the respective type and produce a Boolean integer result.
 
 * *Conversions*: consume a value of one type and produce a result of another
-  (the source type of the conversion is the one after the ":math:`\K{/}`").
+  (the source type of the conversion is the one after the ":math:`\K{\_}`").
 
 Some integer instructions come in two flavors,
 where a signedness annotation |sx| distinguishes whether the operands are to be :ref:`interpreted <aux-signed>` as :ref:`unsigned <syntax-uint>` or :ref:`signed <syntax-sint>` integers.
@@ -200,12 +200,16 @@ Instructions in this group can operate on operands of any :ref:`value type <synt
    \production{instruction} & \instr &::=&
      \dots \\&&|&
      \DROP \\&&|&
-     \SELECT
+     \SELECT~(\valtype^\ast)^? \\
    \end{array}
 
-The |DROP| operator simply throws away a single operand.
+The |DROP| instruction simply throws away a single operand.
 
-The |SELECT| operator selects one of its first two operands based on whether its third operand is zero or not.
+The |SELECT| instruction selects one of its first two operands based on whether its third operand is zero or not.
+It may include a :ref:`value type <syntax-valtype>` determining the type of these operands. If missing, the operands must be of :ref:`numeric type <syntax-numtype>`.
+
+.. note::
+   In future versions of WebAssembly, the type annotation on |SELECT| may allow for more than a single value being selected at the same time.
 
 
 .. index:: ! variable instruction, local, global, local index, global index
@@ -234,24 +238,43 @@ The |LOCALTEE| instruction is like |LOCALSET| but also returns its argument.
 
 .. index:: ! table instruction, table, table index, trap
    pair: abstract syntax; instruction
+.. _syntax-instr-table:
 .. _syntax-table.get:
 .. _syntax-table.set:
-.. _syntax-instr-table:
+.. _syntax-table.size:
+.. _syntax-table.grow:
+.. _syntax-table.fill:
 
 Table Instructions
 ~~~~~~~~~~~~~~~~~~
 
-Instructions in this group are concerned with accessing :ref:`tables <syntax-table>`.
+Instructions in this group are concerned with tables :ref:`table <syntax-table>`.
 
 .. math::
    \begin{array}{llcl}
    \production{instruction} & \instr &::=&
      \dots \\&&|&
      \TABLEGET~\tableidx \\&&|&
-     \TABLESET~\tableidx \\
+     \TABLESET~\tableidx \\&&|&
+     \TABLESIZE~\tableidx \\&&|&
+     \TABLEGROW~\tableidx \\&&|&
+     \TABLEFILL~\tableidx \\
+     \TABLECOPY \\&&|&
+     \TABLEINIT~\elemidx \\&&|&
+     \ELEMDROP~\elemidx \\
    \end{array}
 
-These instructions get or set an element in a table, respectively.
+The |TABLEGET| and |TABLESET| instructions load or store an element in a table, respectively.
+
+The |TABLESIZE| instruction returns the current size of a table.
+The |TABLEGROW| instruction grows table by a given delta and returns the previous size, or :math:`-1` if enough space cannot be allocated.
+It also takes an initialization value for the newly allocated entries.
+
+The |TABLEFILL| instruction sets all entries in a range to a given value.
+
+The |TABLECOPY| instruction copies elements from a source table region to a possibly overlapping destination region.
+The |TABLEINIT| instruction copies elements from a :ref:`passive element segment <syntax-elem>` into a table.
+The |ELEMDROP| instruction prevents further use of a passive element segment. This instruction is intended to be used as an optimization hint. After an element segment is dropped its elements can no longer be retrieved, so the memory used by this segment may be freed.
 
 An additional instruction that accesses a table is the :ref:`control instruction <syntax-instr-control>` |CALLINDIRECT|.
 
@@ -285,11 +308,15 @@ Instructions in this group are concerned with linear :ref:`memory <syntax-mem>`.
      \K{i}\X{nn}\K{.}\STORE\K{16}~\memarg ~|~
      \K{i64.}\STORE\K{32}~\memarg \\&&|&
      \MEMORYSIZE \\&&|&
-     \MEMORYGROW \\
+     \MEMORYGROW \\&&|&
+     \MEMORYFILL \\&&|&
+     \MEMORYCOPY \\&&|&
+     \MEMORYINIT~\dataidx \\&&|&
+     \DATADROP~\dataidx \\
    \end{array}
 
 Memory is accessed with |LOAD| and |STORE| instructions for the different :ref:`value types <syntax-valtype>`.
-They all take a *memory immediate* |memarg| that contains an address *offset* and an *alignment* hint (in base 2 logarithmic representation).
+They all take a *memory immediate* |memarg| that contains an address *offset* and the expected *alignment* (expressed as the exponent of a power of 2).
 Integer loads and stores can optionally specify a *storage size* that is smaller than the :ref:`bit width <syntax-valtype>` of the respective value type.
 In the case of loads, a sign extension mode |sx| is then required to select appropriate behavior.
 
@@ -303,6 +330,11 @@ A :ref:`trap <trap>` results if any of the accessed memory bytes lies outside th
 The |MEMORYSIZE| instruction returns the current size of a memory.
 The |MEMORYGROW| instruction grows memory by a given delta and returns the previous size, or :math:`-1` if enough memory cannot be allocated.
 Both instructions operate in units of :ref:`page size <page-size>`.
+
+The |MEMORYFILL| instruction sets all values in a region to a given byte.
+The |MEMORYCOPY| instruction copies data from a source memory region to a possibly overlapping destination region.
+The |MEMORYINIT| instruction copies data from a :ref:`passive data segment <syntax-data>` into a memory.
+The |DATADROP| instruction prevents further use of a passive data segment. This instruction is intended to be used as an optimization hint. After a data segment is dropped its data can no longer be retrieved, so the memory used by this segment may be freed.
 
 .. note::
    In the current version of WebAssembly,
@@ -379,7 +411,7 @@ In case of |LOOP| it is a *backward jump* to the beginning of the loop.
 
 .. note::
    This enforces *structured control flow*.
-   Intuitively, a branch targeting a |BLOCK| or |IF| behaves like a :math:`\K{break}` statement,
+   Intuitively, a branch targeting a |BLOCK| or |IF| behaves like a :math:`\K{break}` statement in most C-like languages,
    while a branch targeting a |LOOP| behaves like a :math:`\K{continue}` statement.
 
 Branch instructions come in several flavors:

@@ -32,7 +32,7 @@ They mirror the conventions used for :ref:`abstract syntax <grammar>` and for th
 In order to distinguish symbols of the textual syntax from symbols of the abstract syntax, :math:`\mathtt{typewriter}` font is adopted for the former.
 
 * Terminal symbols are either literal strings of characters enclosed in quotes
-  or expressed as |Unicode|_ code points: :math:`\text{module}`, :math:`\unicode{0A}`.
+  or expressed as |Unicode|_ scalar values: :math:`\text{module}`, :math:`\unicode{0A}`.
   (All characters written literally are unambiguously drawn from the 7-bit |ASCII|_ subset of Unicode.)
 
 * Nonterminal symbols are written in typewriter font: :math:`\T{valtype}, \T{instr}`.
@@ -53,6 +53,8 @@ In order to distinguish symbols of the textual syntax from symbols of the abstra
 * Productions are written :math:`\T{sym} ::= T_1 \Rightarrow A_1 ~|~ \dots ~|~ T_n \Rightarrow A_n`, where each :math:`A_i` is the attribute that is synthesized for :math:`\T{sym}` in the given case, usually from attribute variables bound in :math:`T_i`.
 
 * Some productions are augmented by side conditions in parentheses, which restrict the applicability of the production. They provide a shorthand for a combinatorial expansion of the production into many separate cases.
+
+* If the same meta variable or non-terminal symbol appears multiple times in a production (in the syntax or in an attribute), then all those occurrences must have the same instantiation.
 
 .. _text-syntactic:
 
@@ -122,6 +124,8 @@ It is convenient to define identifier contexts as :ref:`records <notation-record
         & \ITABLES & (\Tid^?)^\ast, \\
         & \IMEMS & (\Tid^?)^\ast, \\
         & \IGLOBALS & (\Tid^?)^\ast, \\
+        & \IELEM & (\Tid^?)^\ast, \\
+        & \IDATA & (\Tid^?)^\ast, \\
         & \ILOCALS & (\Tid^?)^\ast, \\
         & \ILABELS & (\Tid^?)^\ast, \\
         & \ITYPEDEFS & \functype^\ast ~\} \\

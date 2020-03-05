@@ -11,7 +11,9 @@ It is meant for discussion, prototype specification and implementation of a prop
 
 * This extension is designed to be compatible with the proposed exception handler extension. The specification for [exception handlers is being developed in a separate branch](https://github.com/effect-handlers/wasm-effect-handlers/tree/exception-handlers).
 
-Original `README` from upstream repository follows...
+The repository is now based on the [bulk operations proposal](proposals/bulk-memory-operations/Overview.md) and includes all respective changes.
+
+Original README from upstream repository follows...
 
 # spec
 

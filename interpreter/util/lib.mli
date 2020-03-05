@@ -2,6 +2,7 @@
 
 module Fun :
 sig
+  val id : 'a -> 'a
   val curry : ('a * 'b -> 'c) -> ('a -> 'b -> 'c)
   val uncurry : ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
 
@@ -30,6 +31,7 @@ sig
   val nth : 'a list -> int32 -> 'a (* raises Failure *)
   val take : int32 -> 'a list -> 'a list (* raises Failure *)
   val drop : int32 -> 'a list -> 'a list (* raises Failure *)
+  val mapi : (int32 -> 'a -> 'b) -> 'a list -> 'b list
 end
 
 module Array32 :
@@ -75,4 +77,5 @@ sig
   val explode : string -> char list
   val split : string -> char -> string list
   val breakup : string -> int -> string list
+  val find_from_opt : (char -> bool) -> string -> int -> int option
 end

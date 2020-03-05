@@ -15,9 +15,11 @@ let global (GlobalType (t, _) as gt) =
     | NumType F32Type -> Num (F32 (F32.of_float 666.6))
     | NumType F64Type -> Num (F64 (F64.of_float 666.6))
     | RefType _ -> Ref NullRef
+    | BotType -> assert false
   in Global.alloc gt v
 
-let table = Table.alloc (TableType ({min = 10l; max = Some 20l}, FuncRefType))
+let table =
+  Table.alloc (TableType ({min = 10l; max = Some 20l}, FuncRefType)) NullRef
 let memory = Memory.alloc (MemoryType {min = 1l; max = Some 2l})
 let func f t = Func.alloc_host t (f t)
 

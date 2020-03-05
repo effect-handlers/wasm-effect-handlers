@@ -30,6 +30,17 @@ let type_of_value = function
   | Ref r -> RefType (type_of_ref r)
 
 
+(* Projections *)
+
+let as_num = function
+  | Num n -> n
+  | Ref _ -> failwith "as_num"
+
+let as_ref = function
+  | Num _ -> failwith "as_ref"
+  | Ref r -> r
+
+
 (* Defaults *)
 
 let default_num = function
@@ -44,6 +55,7 @@ let default_ref = function
 let default_value = function
   | NumType t' -> Num (default_num t')
   | RefType t' -> Ref (default_ref t')
+  | BotType -> assert false
 
 
 (* Conversion *)

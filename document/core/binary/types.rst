@@ -41,7 +41,8 @@ Reference Types
    \begin{array}{llclll@{\qquad\qquad}l}
    \production{reference type} & \Breftype &::=&
      \hex{70} &\Rightarrow& \FUNCREF \\ &&|&
-     \hex{6F} &\Rightarrow& \ANYREF \\
+     \hex{6F} &\Rightarrow& \ANYREF \\ &&|&
+     \hex{6E} &\Rightarrow& \NULLREF \\
    \end{array}
 
 
@@ -61,6 +62,13 @@ Value Types
      t{:}\Breftype &\Rightarrow& t \\
    \end{array}
 
+<<<<<<< HEAD
+=======
+.. note::
+   The type :math:`\BOT` cannot occur in a module.
+
+
+>>>>>>> 7cfa19962056c87c8747c2c1edf8679cf055cd3f
 .. index:: result type, value type
    pair: binary format; result type
 .. _binary-resulttype:
