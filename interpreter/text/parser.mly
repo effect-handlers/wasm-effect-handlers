@@ -146,20 +146,17 @@ let inline_type_explicit (c : context) x ft at =
 %}
 
 %token LPAR RPAR
-%token NAT INT FLOAT STRING VAR
-%token ANYREF FUNCREF NUM_TYPE MUT
+%token ANYREF FUNCREF MUT
 %token NOP DROP BLOCK END IF THEN ELSE SELECT LOOP BR BR_IF BR_TABLE
 %token CALL CALL_INDIRECT RETURN
 %token LOCAL_GET LOCAL_SET LOCAL_TEE GLOBAL_GET GLOBAL_SET TABLE_GET TABLE_SET
-%token LOAD STORE OFFSET_EQ_NAT ALIGN_EQ_NAT
 %token REF_NULL REF_FUNC REF_HOST REF_IS_NULL
-%token CONST UNARY BINARY TEST COMPARE CONVERT
 %token UNREACHABLE MEMORY_SIZE MEMORY_GROW
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
-%token TABLE ELEM MEMORY DATA OFFSET IMPORT EXPORT TABLE
+%token TABLE ELEM MEMORY DATA OFFSET IMPORT EXPORT
 %token MODULE BIN QUOTE
 %token SCRIPT REGISTER INVOKE GET
-%token ASSERT_MALFORMED ASSERT_INVALID ASSERT_SOFT_INVALID ASSERT_UNLINKABLE
+%token ASSERT_MALFORMED ASSERT_INVALID ASSERT_UNLINKABLE
 %token ASSERT_RETURN ASSERT_RETURN_CANONICAL_NAN ASSERT_RETURN_ARITHMETIC_NAN
 %token ASSERT_RETURN_REF ASSERT_RETURN_FUNC ASSERT_TRAP ASSERT_EXHAUSTION
 %token INPUT OUTPUT
@@ -182,8 +179,7 @@ let inline_type_explicit (c : context) x ft at =
 %token<string> OFFSET_EQ_NAT
 %token<string> ALIGN_EQ_NAT
 
-%nonassoc LOW
-%nonassoc VAR
+%token LOW
 
 %start script script1 module1
 %type<Script.script> script
@@ -272,7 +268,7 @@ bind_var :
   | VAR { $1 @@ at () }
 
 labeling_opt :
-  | /* empty */ %prec LOW
+  | /* empty */ LOW
     { fun c xs ->
       List.iter (fun x -> error x.at "mismatching label") xs;
       anon_label c }
@@ -283,7 +279,7 @@ labeling_opt :
       bind_label c $1 }
 
 labeling_end_opt :
-  | /* empty */ %prec LOW { [] }
+  | /* empty */ LOW { [] }
   | bind_var { [$1] }
 
 offset_opt :
@@ -414,9 +410,6 @@ block_instr :
   | IF labeling_opt block ELSE labeling_end_opt instr_list END labeling_end_opt
     { fun c -> let c' = $2 c ($5 @ $8) in
       let ts, es1 = $3 c' in if_ ts es1 ($6 c') }
-
-block_type :
-  | LPAR RESULT value_type RPAR { [$3] }
 
 block :
   | type_use block_param_body
