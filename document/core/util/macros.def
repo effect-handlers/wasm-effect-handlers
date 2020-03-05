@@ -3,11 +3,19 @@
 .. External Standards
 .. ------------------
 
+<<<<<<< HEAD
 .. |WasmDraft| replace:: https://webassembly.github.io/reference-types/core/
 .. _WasmDraft: https://webassembly.github.io/reference-types/core/
 
 .. |WasmIssues| replace:: https://github.com/webassembly/reference-types/issues/
 .. _WasmIssues: https://github.com/webassembly/reference-types/issues/
+=======
+.. |WasmDraft| replace:: http://webassembly.github.io/multi-value/core/
+.. _WasmDraft: http://webassembly.github.io/multi-value/core/
+
+.. |WasmIssues| replace:: http://github.com/webassembly/multi-value/issues/
+.. _WasmIssues: http://github.com/webassembly/multi-value/issues/
+>>>>>>> 0032d27f85fc5eb6dad4e8477439f49a957975fe
 
 .. |IEEE754| replace:: IEEE 754-2019
 .. _IEEE754: https://ieeexplore.ieee.org/document/8766229
@@ -126,6 +134,7 @@
 .. |byte| mathdef:: \xref{syntax/values}{syntax-byte}{\X{byte}}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 .. |uX#1| mathdef:: {\X{u}#1}
 .. |sX#1| mathdef:: {\X{s}#1}
 .. |iX#1| mathdef:: {\X{i}#1}
@@ -157,6 +166,8 @@
 .. |f32| mathdef:: \xref{syntax/values}{syntax-float}{\fX{\X{32}}}
 .. |f64| mathdef:: \xref{syntax/values}{syntax-float}{\fX{\X{64}}}
 =======
+=======
+>>>>>>> 0032d27f85fc5eb6dad4e8477439f49a957975fe
 .. |uX#1| mathdef:: {\X{u#1}}
 .. |sX#1| mathdef:: {\X{s#1}}
 .. |iX#1| mathdef:: {\X{i#1}}
@@ -186,7 +197,10 @@
 .. |fNmag| mathdef:: \xref{syntax/values}{syntax-float}{\X{f}\X{Nmag}}
 .. |f32| mathdef:: \xref{syntax/values}{syntax-float}{\X{f32}}
 .. |f64| mathdef:: \xref{syntax/values}{syntax-float}{\X{f64}}
+<<<<<<< HEAD
 >>>>>>> 7cfa19962056c87c8747c2c1edf8679cf055cd3f
+=======
+>>>>>>> 0032d27f85fc5eb6dad4e8477439f49a957975fe
 
 .. |name| mathdef:: \xref{syntax/values}{syntax-name}{\X{name}}
 .. |char| mathdef:: \xref{syntax/values}{syntax-name}{\X{char}}

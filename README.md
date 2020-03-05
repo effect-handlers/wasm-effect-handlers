@@ -7,7 +7,11 @@ It is meant for discussion, prototype specification and implementation of a prop
 
 * This proposal is based upon the [reference types](https://github.com/webassembly/reference-types) and [multi value](https://github.com/webassembly/multi-value) proposals.
 
+<<<<<<< HEAD
 * See the [formal specification](https://github.com/effect-handlers/wasm-effect) for the proposed semantics for effect handlers.
+=======
+* See the [modified spec](https://webassembly.github.io/multi-value/) for details.
+>>>>>>> 0032d27f85fc5eb6dad4e8477439f49a957975fe
 
 * This extension is designed to be compatible with the proposed exception handler extension. The specification for [exception handlers is being developed in a separate branch](https://github.com/effect-handlers/wasm-effect-handlers/tree/exception-handlers).
 

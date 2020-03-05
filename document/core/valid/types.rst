@@ -80,7 +80,33 @@ Block Types
    }
 
 
+<<<<<<< HEAD
 .. index:: table type, reference type, limits
+=======
+.. index:: function type
+   pair: validation; function type
+   single: abstract syntax; function type
+.. _valid-functype:
+
+Function Types
+~~~~~~~~~~~~~~
+
+:ref:`Function types <syntax-functype>` are always valid.
+
+:math:`[t_1^n] \to [t_2^m]`
+...........................
+
+* The function type is valid.
+
+.. math::
+   \frac{
+   }{
+     \vdashfunctype [t_1^\ast] \to [t_2^\ast] \ok
+   }
+
+
+.. index:: table type, element type, limits
+>>>>>>> 0032d27f85fc5eb6dad4e8477439f49a957975fe
    pair: validation; table type
    single: abstract syntax; table type
 .. _valid-tabletype:
