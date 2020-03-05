@@ -415,9 +415,6 @@ block_instr :
     { fun c -> let c' = $2 c ($5 @ $8) in
       let ts, es1 = $3 c' in if_ ts es1 ($6 c') }
 
-block_type :
-  | LPAR RESULT value_type RPAR { [$3] }
-
 block :
   | type_use block_param_body
     { let at1 = ati 1 in
