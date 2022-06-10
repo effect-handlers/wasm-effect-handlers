@@ -1,3 +1,6 @@
+**This repository is out-of-date. The development has moved to the [wasm-spec](https://github.com/effect-handlers/wasm-spec) repository.**
+<hr/>
+
 [![Build Status](https://travis-ci.org/WebAssembly/reference-types.svg?branch=master)](https://travis-ci.org/WebAssembly/reference-types)
 
 # Effect Handlers Proposal for WebAssembly
